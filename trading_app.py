@@ -6,7 +6,30 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import random
+import re
 from datetime import datetime
+
+# ---------------------------------------------------------------------------
+# GÜVENLİK: kullanıcı girdisi doğrulama (sınırda temizle)
+# ---------------------------------------------------------------------------
+# Geçerli sembol karakterleri: harf, rakam, nokta, tire, ^ (endeksler). Bu
+# beyaz-liste, kullanıcı girdisinin HTML'e (unsafe_allow_html) veya dış
+# servis URL'lerine enjekte edilmesini (XSS / injection) engeller.
+TICKER_RE = re.compile(r"^[A-Z0-9.\-^]{1,10}$")
+MAX_TICKERS = 50  # aşırı sorgu/DoS'a karşı üst sınır
+
+
+def sanitize_tickers(raw: str) -> list:
+    """Ham kullanıcı girdisini güvenli, tekrarsız sembol listesine indirger."""
+    seen, out = set(), []
+    for part in raw.split(","):
+        sym = part.strip().upper()
+        if sym and TICKER_RE.match(sym) and sym not in seen:
+            seen.add(sym)
+            out.append(sym)
+        if len(out) >= MAX_TICKERS:
+            break
+    return out
 
 # ===========================================================================
 # SABİTLER
@@ -898,6 +921,106 @@ def detect_whale_activity(tickers: list) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+# ===========================================================================
+# OPSİYON AKIŞI (yfinance opsiyon zinciri — ÜCRETSİZ)
+# ===========================================================================
+
+@st.cache_data(ttl=1800)
+def options_flow(ticker: str, max_expiries: int = 3) -> dict:
+    """
+    yfinance opsiyon zinciriyle ücretsiz opsiyon-akışı vekili.
+    Gerçek 'flow' (paralı feed) değildir; kamuya açık hacim + açık pozisyon
+    (OI) verisinden Put/Call dengesi ve olağandışı kontratları çıkarır.
+    Olağandışı = günlük hacim > mevcut OI (yeni pozisyon akını) ve hacim >= 500.
+    """
+    try:
+        tk = yf.Ticker(ticker)
+        expiries = list(tk.options[:max_expiries])
+    except Exception:
+        return {"ok": False}
+    if not expiries:
+        return {"ok": False}
+
+    call_vol = put_vol = call_oi = put_oi = 0.0
+    unusual = []
+    for exp in expiries:
+        try:
+            chain = tk.option_chain(exp)
+        except Exception:
+            continue
+        for df_o, is_call in ((chain.calls, True), (chain.puts, False)):
+            if df_o is None or df_o.empty:
+                continue
+            v = df_o["volume"].fillna(0)
+            oi = df_o["openInterest"].fillna(0)
+            if is_call:
+                call_vol += float(v.sum()); call_oi += float(oi.sum())
+            else:
+                put_vol += float(v.sum()); put_oi += float(oi.sum())
+            udf = df_o.assign(volume=v, openInterest=oi)
+            mask = (udf["volume"] > udf["openInterest"]) & (udf["volume"] >= 500)
+            for _, row in udf[mask].iterrows():
+                unusual.append({
+                    "Yön": "CALL" if is_call else "PUT",
+                    "Vade": exp,
+                    "Strike": float(row["strike"]),
+                    "Hacim": int(row["volume"]),
+                    "OI": int(row["openInterest"]),
+                    "Son $": round(float(row.get("lastPrice", 0) or 0), 2),
+                })
+    total_vol = call_vol + put_vol
+    if total_vol <= 0:
+        return {"ok": False}
+    unusual.sort(key=lambda x: x["Hacim"], reverse=True)
+    return {
+        "ok": True,
+        "call_vol": call_vol, "put_vol": put_vol,
+        "call_oi": call_oi, "put_oi": put_oi,
+        "pc_ratio": (put_vol / call_vol) if call_vol > 0 else None,
+        "unusual": unusual[:15],
+        "expiries": expiries,
+    }
+
+
+# ===========================================================================
+# DARK POOL / OFF-EXCHANGE (FINRA günlük short-hacim — ÜCRETSİZ, RESMİ)
+# ===========================================================================
+
+@st.cache_data(ttl=3600)
+def finra_short_volume(symbols_tuple: tuple) -> dict:
+    """
+    FINRA'nın günlük konsolide short-hacim dosyası (CNMSshvol).
+    Ücretsiz ve resmidir; borsa-dışı (off-exchange / dark pool) aktivite için
+    sektörde yaygın kullanılan vekil göstergedir. Gerçek dark pool print'i
+    değildir — short hacmin toplam hacme oranını verir (bir günlük gecikmeli).
+    """
+    import io
+    import urllib.request
+    from datetime import timedelta
+
+    base = "https://cdn.finra.org/equity/regsho/daily/CNMSshvol{}.txt"
+    day = datetime.now()
+    for _ in range(6):  # en yakın yayınlanmış işlem gününü bul
+        url = base.format(day.strftime("%Y%m%d"))
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            raw = urllib.request.urlopen(req, timeout=12).read().decode("utf-8", "ignore")
+            header = raw.split("\n", 1)[0]
+            if "Symbol" in header:
+                df = pd.read_csv(io.StringIO(raw), sep="|")
+                df = df[df["Symbol"].notna() & (df["Symbol"] != "Total")]
+                sub = df[df["Symbol"].isin(symbols_tuple)].copy()
+                if sub.empty:
+                    return {"ok": False, "reason": "havuzdaki hisseler dosyada yok"}
+                sub["Short %"] = (sub["ShortVolume"] / sub["TotalVolume"] * 100).round(1)
+                sub = sub.sort_values("Short %", ascending=False)
+                return {"ok": True, "date": day.strftime("%d.%m.%Y"), "df": sub}
+        except Exception:
+            pass
+        day -= timedelta(days=1)
+    return {"ok": False, "reason": "FINRA verisi çekilemedi"}
+
+
 def detect_downtrend_line(df: pd.DataFrame, lookback: int = 45):
     """Konsolidasyondaki düşen direnç çizgisini (zirve → daha düşük tepe) bulur."""
     if len(df) < 10:
@@ -1640,6 +1763,82 @@ def page_market_pulse(tickers):
 
     st.divider()
 
+    # ---------- 7b) DARK POOL / OFF-EXCHANGE (FINRA) ----------
+    st.markdown("###  Dark Pool & Off-Exchange Aktivitesi")
+    st.caption("FINRA günlük konsolide short-hacim verisi (resmi, ücretsiz, ~1 gün gecikmeli). "
+               "Short hacmin toplam hacme yüksek oranı = yoğun borsa-dışı/kurumsal aktivite vekili. "
+               "Gerçek zamanlı dark pool print'i değildir.")
+    if st.button(" Dark Pool Tara (FINRA)", key="darkpool_btn"):
+        with st.spinner("FINRA verisi çekiliyor..."):
+            st.session_state["darkpool_res"] = finra_short_volume(tuple(tickers))
+
+    dp = st.session_state.get("darkpool_res")
+    if dp is not None:
+        if not dp.get("ok"):
+            st.info(f"Veri alınamadı ({dp.get('reason', 'bilinmiyor')}). "
+                    "Hafta sonu/tatilde FINRA dosyası yayınlanmaz.")
+        else:
+            st.caption(f"Veri tarihi: {dp['date']}")
+            dpv = dp["df"][["Symbol", "Short %", "ShortVolume", "TotalVolume"]].rename(
+                columns={"Symbol": "Hisse", "ShortVolume": "Short Hacim",
+                         "TotalVolume": "Toplam Hacim"})
+            st.dataframe(dpv, use_container_width=True, hide_index=True,
+                         column_config={
+                             "Short %": st.column_config.ProgressColumn(
+                                 "Short %", format="%.1f%%", min_value=0, max_value=100),
+                             "Short Hacim": st.column_config.NumberColumn(format="%d"),
+                             "Toplam Hacim": st.column_config.NumberColumn(format="%d"),
+                         })
+            hot = dpv.iloc[0]
+            st.markdown(f" En yüksek off-exchange baskısı: **{hot['Hisse']}** "
+                        f"(short oranı {hot['Short %']}%)")
+
+    st.divider()
+
+    # ---------- 7c) OPSİYON AKIŞI (yfinance) ----------
+    st.markdown("###  Opsiyon Akışı")
+    st.caption("yfinance opsiyon zincirinden ücretsiz vekil: Put/Call dengesi ve olağandışı "
+               "kontratlar (günlük hacim > açık pozisyon = yeni pozisyon akını). "
+               "Gerçek zamanlı paralı 'flow' değildir.")
+    of_col = st.columns([2, 1])
+    of_ticker = of_col[0].selectbox("Hisse seç", tickers, key="of_ticker")
+    if of_col[1].button(" Opsiyon Akışını Getir", key="opt_flow_btn"):
+        with st.spinner(f"{of_ticker} opsiyon zinciri okunuyor..."):
+            st.session_state["opt_flow_res"] = (of_ticker, options_flow(of_ticker))
+
+    ofr = st.session_state.get("opt_flow_res")
+    if ofr is not None:
+        of_sym, of = ofr
+        if not of.get("ok"):
+            st.info(f"{of_sym} için opsiyon verisi bulunamadı (opsiyonu olmayan/likit olmayan hisse olabilir).")
+        else:
+            pc = of["pc_ratio"]
+            m = st.columns(4)
+            m[0].metric("Call Hacmi", f"{of['call_vol']:,.0f}")
+            m[1].metric("Put Hacmi", f"{of['put_vol']:,.0f}")
+            m[2].metric("Put/Call Oranı", f"{pc:.2f}" if pc else "—")
+            m[3].metric("Toplam OI", f"{(of['call_oi'] + of['put_oi']):,.0f}")
+            if pc is not None:
+                if pc < 0.7:
+                    st.success(f" Call ağırlıklı (P/C {pc:.2f}) — boğa opsiyon iştahı.")
+                elif pc > 1.0:
+                    st.error(f" Put ağırlıklı (P/C {pc:.2f}) — korunma/ayı opsiyon iştahı.")
+                else:
+                    st.info(f" Dengeli opsiyon akışı (P/C {pc:.2f}).")
+            if of["unusual"]:
+                st.markdown("**Olağandışı Kontratlar** (hacim > açık pozisyon)")
+                st.dataframe(pd.DataFrame(of["unusual"]), use_container_width=True, hide_index=True,
+                             column_config={
+                                 "Strike": st.column_config.NumberColumn(format="%.1f"),
+                                 "Hacim": st.column_config.NumberColumn(format="%d"),
+                                 "OI": st.column_config.NumberColumn(format="%d"),
+                                 "Son $": st.column_config.NumberColumn(format="$%.2f"),
+                             })
+            else:
+                st.caption("Bu vadelerde olağandışı kontrat yok.")
+
+    st.divider()
+
     # ---------- 8) GÜNÜN YORUMU ----------
     st.markdown("### Günün Yorumu")
     _render_daily_commentary(spx_chg, vix_chg, ndx_chg, sec_df)
@@ -1759,7 +1958,10 @@ def main():
                     unsafe_allow_html=True)
         custom = st.text_input("Hisse listesi (virgülle)", "", placeholder="AAPL, MSFT, NVDA",
                                key="sidebar_tickers")
-        tickers = [t.strip().upper() for t in custom.split(",") if t.strip()] or list(DEFAULT_TICKERS)
+        _clean = sanitize_tickers(custom)
+        tickers = _clean or list(DEFAULT_TICKERS)
+        if custom.strip() and not _clean:
+            st.sidebar.warning("Geçersiz sembol girdisi — varsayılan listeye dönüldü.")
 
         st.divider()
         st.markdown('<p style="font-size:0.78rem;font-weight:600;color:#9ca3af;">RİSK YÖNETİMİ</p>',
