@@ -1,5 +1,8 @@
 # 📈 Market Overview Dashboard
 
+[![CI](https://github.com/bugra123uysal/-Market_Overview_Dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/bugra123uysal/-Market_Overview_Dashboard/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 <img width="1077" height="368" alt="Ekran görüntüsü 2026-07-02 134631" src="https://github.com/user-attachments/assets/2a5f1002-304c-4dcb-a781-41080208e8cd" />
 <img width="1549" height="517" alt="Ekran görüntüsü 2026-07-02 134615" src="https://github.com/user-attachments/assets/c9e21146-392d-417f-a625-bdc428633631" />
 <img width="1544" height="554" alt="Ekran görüntüsü 2026-07-02 134556" src="https://github.com/user-attachments/assets/e77ebd07-47e9-46a7-8628-ff69da690faf" />
