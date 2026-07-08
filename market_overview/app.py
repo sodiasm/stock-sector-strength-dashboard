@@ -3,12 +3,16 @@
 import streamlit as st
 
 from market_overview.config import DEFAULT_TICKERS
+from market_overview.i18n import L
 from market_overview.pages import page_market_pulse
 from market_overview.security import sanitize_tickers
 
 
 def main():
-    st.set_page_config(page_title="Genel Bakış", page_icon="", layout="wide")
+    st.set_page_config(page_title="Market Overview", page_icon="📈", layout="wide")
+
+    # Dil seçimi (session_state["lang"]); sayfa render'ından önce ayarlanır.
+    st.session_state.setdefault("lang", "TR")
 
     st.markdown("""
     <style>
@@ -96,36 +100,48 @@ def main():
 
     # Uyarı bandı
     st.markdown(
-        '<div class="warn-bar"> Bu araç yalnızca eğitim amaçlıdır. '
-        'Gerçek emir göndermez ve yatırım tavsiyesi niteliği taşımaz.</div>',
+        '<div class="warn-bar"> ' + L(
+            "Bu araç yalnızca eğitim amaçlıdır. Gerçek emir göndermez ve yatırım "
+            "tavsiyesi niteliği taşımaz.",
+            "This tool is for educational purposes only. It places no real orders "
+            "and is not investment advice.") + '</div>',
         unsafe_allow_html=True)
 
     # Başlık
     st.markdown(
-        '<h1 style="font-size:1.6rem;font-weight:800;color:#f1f5f9;margin-bottom:2px;"> Genel Bakış</h1>'
+        '<h1 style="font-size:1.6rem;font-weight:800;color:#f1f5f9;margin-bottom:2px;"> '
+        + L("Genel Bakış", "Market Overview") + '</h1>'
         '<p style="color:#6b7280;font-size:0.82rem;margin-bottom:16px;">'
-        'Piyasayı oku · Risk-On mu Risk-Off mu · Nerede fırsat var</p>',
+        + L("Piyasayı oku · Risk-On mu Risk-Off mu · Nerede fırsat var",
+            "Read the market · Risk-On or Risk-Off · Where the opportunity is")
+        + '</p>',
         unsafe_allow_html=True)
 
     # ── Sidebar ──
     with st.sidebar:
-        st.markdown('<p style="font-size:0.95rem;font-weight:700;color:#f1f5f9;margin-bottom:8px;"> Ayarlar</p>',
+        # Dil seçici — en üstte, sayfa render'ından önce
+        st.radio("Dil / Language", ["TR", "EN"], horizontal=True, key="lang")
+
+        st.markdown('<p style="font-size:0.95rem;font-weight:700;color:#f1f5f9;margin-bottom:8px;"> '
+                    + L("Ayarlar", "Settings") + '</p>',
                     unsafe_allow_html=True)
-        custom = st.text_input("Hisse listesi (virgülle)", "", placeholder="AAPL, MSFT, NVDA",
-                               key="sidebar_tickers")
+        custom = st.text_input(L("Hisse listesi (virgülle)", "Ticker list (comma-separated)"), "",
+                               placeholder="AAPL, MSFT, NVDA", key="sidebar_tickers")
         _clean = sanitize_tickers(custom)
         tickers = _clean or list(DEFAULT_TICKERS)
         if custom.strip() and not _clean:
-            st.sidebar.warning("Geçersiz sembol girdisi — varsayılan listeye dönüldü.")
+            st.sidebar.warning(L("Geçersiz sembol girdisi — varsayılan listeye dönüldü.",
+                                 "Invalid ticker input — reverted to the default list."))
 
         st.divider()
-        st.markdown('<p style="font-size:0.78rem;font-weight:600;color:#9ca3af;">RİSK YÖNETİMİ</p>',
+        st.markdown('<p style="font-size:0.78rem;font-weight:600;color:#9ca3af;">'
+                    + L("RİSK YÖNETİMİ", "RISK MANAGEMENT") + '</p>',
                     unsafe_allow_html=True)
 
         st.divider()
         st.markdown(
-            f'<p style="font-size:0.75rem;color:#4b5563;">Havuz: '
-            f'<b style="color:#9ca3af;">{len(tickers)} hisse</b><br>'
+            f'<p style="font-size:0.75rem;color:#4b5563;">{L("Havuz", "Pool")}: '
+            f'<b style="color:#9ca3af;">{len(tickers)} {L("hisse", "stocks")}</b><br>'
             f'<span style="color:#374151;">{", ".join(tickers[:6])}{"…" if len(tickers) > 6 else ""}</span></p>',
             unsafe_allow_html=True)
 

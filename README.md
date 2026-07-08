@@ -25,6 +25,9 @@ Before opening any position, a trader needs context: How are the indices? Is VIX
 
 ## 🛠️ Features
 
+**Bilingual UI (TR / EN)**
+Switch the interface language between Turkish and English from the sidebar — the whole dashboard re-renders instantly.
+
 **Daily Macro Summary**
 Live values and daily change for S&P 500, Nasdaq, Dow, Russell 2000, VIX, 10-year yield, DXY, Gold, Oil, and Bitcoin — with a **Risk-On / Risk-Off banner** (green when indices are up and VIX is down; red otherwise).
 
@@ -139,6 +142,9 @@ Momentum swing trader'lar için tek sayfalık piyasa brifing panosu. Her sabah b
 Pozisyon açmadan önce trader'ın bağlama ihtiyacı vardır: Endeksler nasıl? VIX yükseliyor mu? Para hangi sektöre dönüyor? Asya ve Avrupa nasıl kapandı? Bunları ayrı sekmelerde kontrol etmek yavaş ve hataya açıktır. Bu pano hepsini tek bakışta cevaplar.
 
 ## 🛠️ Özellikler
+
+**Çift Dilli Arayüz (TR / EN)**
+Arayüz dilini kenar çubuğundan Türkçe ↔ İngilizce değiştir — tüm pano anında yeniden render edilir.
 
 **Günlük Makro Özet**
 S&P 500, Nasdaq, Dow, Russell 2000, VIX, 10 yıllık faiz, DXY, Altın, Petrol ve Bitcoin'in anlık değeri ve günlük değişimi — yanında **Risk-On / Risk-Off banner'ı** (endeksler yukarı + VIX aşağı ise yeşil; tersi kırmızı).
