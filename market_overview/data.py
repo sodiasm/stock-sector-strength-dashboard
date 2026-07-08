@@ -1,5 +1,8 @@
 """yfinance/FINRA veri çekme ve opsiyon/short-volume yardımcıları."""
 
+import functools
+import time
+
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -7,6 +10,30 @@ from datetime import datetime
 
 from market_overview.config import STOCK_SECTOR_MAP
 from market_overview.logging_conf import logger
+
+
+def retry(attempts: int = 3, base_delay: float = 0.5):
+    """Ağ çağrılarını exponential backoff ile yeniden dener (0.5s, 1s, 2s).
+
+    Yalnızca exception'da tekrar dener. Tüm denemeler tükenirse hatayı loglar
+    ve ``None`` döner — böylece çağıran taraf mevcut davranışı (None) korur.
+    """
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            delay = base_delay
+            for attempt in range(attempts):
+                try:
+                    return fn(*args, **kwargs)
+                except Exception as e:  # noqa: BLE001 — bilinçli geniş yakalama
+                    if attempt == attempts - 1:
+                        logger.warning("%s %d denemede başarısız: %s", fn.__name__, attempts, e)
+                        return None
+                    time.sleep(delay)
+                    delay *= 2
+            return None
+        return wrapper
+    return decorator
 
 
 @st.cache_data(ttl=3600)
@@ -49,34 +76,32 @@ def sector_rs(ticker: str, df: pd.DataFrame) -> dict:
 
 
 @st.cache_data(ttl=180, show_spinner=False)
+@retry()
 def fetch_daily(ticker: str, period: str = "3mo") -> pd.DataFrame | None:
-    """Günlük veri (Piyasa Nabzı için, kısa cache = canlıya yakın)."""
-    try:
-        df = yf.download(ticker, period=period, interval="1d",
-                         progress=False, auto_adjust=True)
-        if df is None or len(df) < 2:
-            return None
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        return df.dropna()
-    except Exception as e:
-        logger.warning("%s günlük verisi çekilemedi (%s): %s", ticker, period, e)
+    """Günlük veri (Piyasa Nabzı için, kısa cache = canlıya yakın).
+
+    Ağ hatalarında :func:`retry` ile 3 kez denenir; kalıcı hatada ``None`` döner.
+    """
+    df = yf.download(ticker, period=period, interval="1d",
+                     progress=False, auto_adjust=True)
+    if df is None or len(df) < 2:
         return None
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    return df.dropna()
 
 
 @st.cache_data(ttl=300, show_spinner=False)
+@retry()
 def fetch_data(ticker: str, period: str, interval: str) -> pd.DataFrame | None:
-    try:
-        df = yf.download(ticker, period=period, interval=interval,
-                         progress=False, auto_adjust=True)
-        if df is None or len(df) < 30:
-            return None
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        return df.dropna()
-    except Exception as e:
-        logger.warning("%s verisi çekilemedi (%s/%s): %s", ticker, period, interval, e)
+    """Belirtilen periyot/aralıkta veri çeker; ağ hatalarında yeniden dener."""
+    df = yf.download(ticker, period=period, interval=interval,
+                     progress=False, auto_adjust=True)
+    if df is None or len(df) < 30:
         return None
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    return df.dropna()
 
 
 @st.cache_data(ttl=1800)
