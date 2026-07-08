@@ -70,10 +70,50 @@ A plain-language summary generated from the collected data: How is the market? I
 ## 🚀 Run Locally
 
 ```bash
-git clone https://github.com/bugra123uysal/market-overview-dashboard.git
+# The repo name starts with a dash, so clone into a plain folder name:
+git clone https://github.com/bugra123uysal/-Market_Overview_Dashboard.git market-overview-dashboard
 cd market-overview-dashboard
 pip install -r requirements.txt
 streamlit run trading_app.py
+```
+
+`trading_app.py` is a thin entry point; the application lives in the
+`market_overview/` package.
+
+## 🗂️ Project Structure
+
+```text
+market_overview/
+├── app.py            # entry: set_page_config, CSS, page routing
+├── config.py         # symbol universes, macro assets, colors, constants
+├── security.py       # sanitize_tickers — user-input validation
+├── indicators.py     # EMA, RSI, MFI, OBV, ATR, RVOL, ADR%, trend template
+├── signals.py        # setup detection, scoring, whale/flow signals
+├── data.py           # yfinance/FINRA fetch, options flow, retry decorator
+├── scanners.py       # market / momentum / Qullamaggie scanners
+├── backtest.py       # backtest + trade-plan builder
+├── charts.py         # Plotly chart builders
+├── pages.py          # Streamlit page/section renderers
+└── logging_conf.py   # central logger
+trading_app.py        # thin Streamlit entry point (Streamlit Cloud target)
+tests/                # network-free pytest suite
+.github/workflows/    # CI (ruff + import sanity + pytest)
+```
+
+## 🔄 Data Flow
+
+```mermaid
+flowchart LR
+    A["yfinance / FINRA"] -->|data.py| B["Raw OHLCV · options · short-vol"]
+    B -->|indicators.py| C["Indicators<br/>EMA · RSI · ATR · RVOL"]
+    C -->|signals.py| D["Setups & Scores"]
+    B --> E["Scanners<br/>market · momentum · Qullamaggie"]
+    C --> E
+    D --> E
+    C --> F["charts.py<br/>Plotly"]
+    D --> G["pages.py → Streamlit UI"]
+    E --> G
+    F --> G
 ```
 
 ## ⚠️ Disclaimer
@@ -136,11 +176,17 @@ Toplanan verilere dayalı düz yazı özet: Piyasa nasıl? Risk var mı? Hangi s
 ## 🚀 Yerelde Çalıştırma
 
 ```bash
-git clone https://github.com/bugra123uysal/market-overview-dashboard.git
+# Repo adı tire ile başlar; düz bir klasör adına klonlayın:
+git clone https://github.com/bugra123uysal/-Market_Overview_Dashboard.git market-overview-dashboard
 cd market-overview-dashboard
 pip install -r requirements.txt
 streamlit run trading_app.py
 ```
+
+`trading_app.py` ince bir giriş noktasıdır; uygulama `market_overview/`
+paketinde yaşar. Proje yapısı ve veri akışı diyagramı için üstteki
+[Project Structure](#️-project-structure) ve [Data Flow](#-data-flow)
+bölümlerine bakın.
 
 ## ⚠️ Uyarı
 
