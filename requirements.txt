@@ -1,5 +1,7 @@
-streamlit
-yfinance
-pandas
-numpy
-plotly
+# Pinned with lower + upper bounds. yfinance breaks often on Yahoo API
+# changes, so the upper bound is important to avoid silent breakage.
+streamlit>=1.58,<2.0
+yfinance>=1.4,<2.0
+pandas>=3.0,<4.0
+numpy>=2.4,<3.0
+plotly>=6.8,<7.0
