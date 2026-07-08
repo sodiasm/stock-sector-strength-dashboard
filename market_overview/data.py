@@ -6,6 +6,7 @@ import pandas as pd
 from datetime import datetime
 
 from market_overview.config import STOCK_SECTOR_MAP
+from market_overview.logging_conf import logger
 
 
 @st.cache_data(ttl=3600)
@@ -15,7 +16,8 @@ def get_float_shares(ticker: str) -> float | None:
         info = yf.Ticker(ticker).info
         fs = info.get("floatShares") or info.get("sharesOutstanding")
         return round(fs / 1e6, 1) if fs else None
-    except Exception:
+    except Exception as e:
+        logger.warning("%s float verisi çekilemedi: %s", ticker, e)
         return None
 
 
@@ -57,7 +59,8 @@ def fetch_daily(ticker: str, period: str = "3mo") -> pd.DataFrame | None:
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
         return df.dropna()
-    except Exception:
+    except Exception as e:
+        logger.warning("%s günlük verisi çekilemedi (%s): %s", ticker, period, e)
         return None
 
 
@@ -71,7 +74,8 @@ def fetch_data(ticker: str, period: str, interval: str) -> pd.DataFrame | None:
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
         return df.dropna()
-    except Exception:
+    except Exception as e:
+        logger.warning("%s verisi çekilemedi (%s/%s): %s", ticker, period, interval, e)
         return None
 
 
@@ -86,7 +90,8 @@ def options_flow(ticker: str, max_expiries: int = 3) -> dict:
     try:
         tk = yf.Ticker(ticker)
         expiries = list(tk.options[:max_expiries])
-    except Exception:
+    except Exception as e:
+        logger.warning("%s opsiyon vadeleri çekilemedi: %s", ticker, e)
         return {"ok": False}
     if not expiries:
         return {"ok": False}
@@ -96,7 +101,8 @@ def options_flow(ticker: str, max_expiries: int = 3) -> dict:
     for exp in expiries:
         try:
             chain = tk.option_chain(exp)
-        except Exception:
+        except Exception as e:
+            logger.warning("%s %s opsiyon zinciri çekilemedi: %s", ticker, exp, e)
             continue
         for df_o, is_call in ((chain.calls, True), (chain.puts, False)):
             if df_o is None or df_o.empty:
@@ -161,7 +167,7 @@ def finra_short_volume(symbols_tuple: tuple) -> dict:
                 sub["Short %"] = (sub["ShortVolume"] / sub["TotalVolume"] * 100).round(1)
                 sub = sub.sort_values("Short %", ascending=False)
                 return {"ok": True, "date": day.strftime("%d.%m.%Y"), "df": sub}
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("FINRA short-hacim %s çekilemedi: %s", day.strftime("%Y%m%d"), e)
         day -= timedelta(days=1)
     return {"ok": False, "reason": "FINRA verisi çekilemedi"}

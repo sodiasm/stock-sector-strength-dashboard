@@ -218,12 +218,16 @@ def page_market_pulse(tickers):
             st.cache_data.clear()
             st.rerun()
 
+    # Çekilemeyen sembolleri say (sessizce yutmak yerine kullanıcıya bildir)
+    failed_syms = []
+
     # ---------- 1) MAKRO TABLO ----------
     st.markdown("### Günlük Makro Özet")
     macro_rows, spx_chg, vix_chg, ndx_chg = [], 0, 0, 0
     for sym, name in MACRO_ASSETS.items():
         df = fetch_daily(sym, "5d")
         if df is None or len(df) < 2:
+            failed_syms.append(sym)
             continue
         chg = (df["Close"].iloc[-1] - df["Close"].iloc[-2]) / df["Close"].iloc[-2] * 100
         if sym == "^GSPC": spx_chg = chg
@@ -252,6 +256,7 @@ def page_market_pulse(tickers):
     for sym, name in SECTOR_ETFS.items():
         df = fetch_daily(sym, "1mo")
         if df is None or len(df) < 6:
+            failed_syms.append(sym)
             continue
         d1 = (df["Close"].iloc[-1] - df["Close"].iloc[-2]) / df["Close"].iloc[-2] * 100
         d5 = (df["Close"].iloc[-1] - df["Close"].iloc[-6]) / df["Close"].iloc[-6] * 100
@@ -299,6 +304,7 @@ def page_market_pulse(tickers):
         for col, (sym, meta) in zip(cols, indices.items()):
             gdf = fetch_daily(sym, "5d")
             if gdf is None or len(gdf) < 2:
+                failed_syms.append(sym)
                 col.markdown(
                     f'<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);'
                     f'border-radius:10px;padding:10px;text-align:center;margin-bottom:8px;">'
@@ -319,6 +325,12 @@ def page_market_pulse(tickers):
                 f'<div style="font-size:1rem;font-weight:800;color:{col_d};margin:3px 0;">{d1:+.2f}%</div>'
                 f'<div style="font-size:0.68rem;color:#6b7280;">haftalık {wk:+.1f}%</div>'
                 f'</div>', unsafe_allow_html=True)
+
+    # Veri çekilemeyen sembol bildirimi (sessiz atlamayı görünür kıl)
+    if failed_syms:
+        st.info(f" {len(failed_syms)} sembol çekilemedi: "
+                f"{', '.join(failed_syms[:12])}{'…' if len(failed_syms) > 12 else ''} "
+                f"— Yahoo Finance geçici olarak yanıt vermemiş olabilir; 'Yenile' deneyin.")
 
     st.divider()
 

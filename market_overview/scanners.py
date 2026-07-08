@@ -7,6 +7,7 @@ import numpy as np
 
 from market_overview.data import fetch_daily, fetch_data, sector_rs
 from market_overview.indicators import compute_adr_pct, momentum_score, relative_volume, trend_template
+from market_overview.logging_conf import logger
 from market_overview.signals import compute_score, detect_setup, stealth_accumulation, system_decision, ut_bot_signals
 
 
@@ -166,7 +167,8 @@ def scan_qullamaggie_yf(universe: list, min_perf1y: float = 50,
                 "Vol 90G":     int(vol90),
                 "_close":      close,
             })
-        except Exception:
+        except Exception as e:
+            logger.warning("%s Qullamaggie taramasında atlandı: %s", ticker, e)
             continue
 
     if not rows:
