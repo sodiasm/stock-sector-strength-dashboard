@@ -1,14 +1,25 @@
 """Piyasa/momentum/Qullamaggie evren tarayıcıları."""
 
+import numpy as np
+import pandas as pd
 import streamlit as st
 import yfinance as yf
-import pandas as pd
-import numpy as np
 
 from market_overview.data import fetch_daily, fetch_data, sector_rs
-from market_overview.indicators import compute_adr_pct, momentum_score, relative_volume, trend_template
+from market_overview.indicators import (
+    compute_adr_pct,
+    momentum_score,
+    relative_volume,
+    trend_template,
+)
 from market_overview.logging_conf import logger
-from market_overview.signals import compute_score, detect_setup, stealth_accumulation, system_decision, ut_bot_signals
+from market_overview.signals import (
+    compute_score,
+    detect_setup,
+    stealth_accumulation,
+    system_decision,
+    ut_bot_signals,
+)
 
 
 def scan_market(tickers: list, period: str, interval: str,
@@ -72,7 +83,6 @@ def scan_qullamaggie_yf(universe: list, min_perf1y: float = 50,
     - Piyasa Değeri > min_cap_b milyar $
     30 dakika cache — yfinance batch ile ~300 hisseyi 15-20 sn'de tarar.
     """
-    import yfinance as yf
 
     if not universe:
         return pd.DataFrame(), 0
@@ -85,7 +95,6 @@ def scan_qullamaggie_yf(universe: list, min_perf1y: float = 50,
     )
 
     rows = []
-    price_1y_ago = {}
 
     for ticker in universe:
         try:

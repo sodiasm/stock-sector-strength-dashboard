@@ -1,0 +1,17 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [".venv", "__pycache__", ".git"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+# E501 (satır uzunluğu): grafik/HTML f-string'leri ve sembol listeleri uzun;
+#   sarmak okunabilirliği düşürür.
+# E701/E702 (tek satırda çoklu ifade): `if x: return y` ve hizalı `a; b`
+#   mevcut idiom; yeniden yazmak davranışı riske atmadan sadece churn üretir.
+# E741: tek harfli değişkenler (l, I) — mevcut idiom.
+ignore = ["E501", "E701", "E702", "E741"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

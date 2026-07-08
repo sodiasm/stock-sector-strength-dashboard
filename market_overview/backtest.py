@@ -1,8 +1,8 @@
 """Basit backtest ve trade planı üretimi/gösterimi."""
 
-import streamlit as st
-import pandas as pd
 import numpy as np
+import pandas as pd
+import streamlit as st
 
 from market_overview.indicators import compute_ema
 

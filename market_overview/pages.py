@@ -1,13 +1,24 @@
 """Streamlit sayfa/bölüm render fonksiyonları."""
 
-import streamlit as st
-import yfinance as yf
-import pandas as pd
-import plotly.graph_objects as go
 from datetime import datetime
 
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+import yfinance as yf
+
 from market_overview.charts import make_cloud_chart
-from market_overview.config import C_DOWN, C_GOLD, C_UP, GLOBAL_INDICES, MACRO_ASSETS, MOMENTUM_UNIVERSE, NASDAQ100, SECTOR_ETFS, SP500_UNIVERSE
+from market_overview.config import (
+    C_DOWN,
+    C_GOLD,
+    C_UP,
+    GLOBAL_INDICES,
+    MACRO_ASSETS,
+    MOMENTUM_UNIVERSE,
+    NASDAQ100,
+    SECTOR_ETFS,
+    SP500_UNIVERSE,
+)
 from market_overview.data import fetch_daily, finra_short_volume, options_flow
 from market_overview.scanners import scan_qullamaggie_yf
 from market_overview.signals import detect_setup, explain_trade
@@ -127,7 +138,6 @@ def _render_qullamaggie_scan_section():
                     plan  = explain_trade(setup, full_df)
 
                     if plan:
-                        rr_col = C_UP if plan["rr"] >= 3 else (C_GOLD if plan["rr"] >= 2 else C_DOWN)
                         pc1, pc2, pc3, pc4 = st.columns(4)
                         pc1.metric("Setup", setup)
                         pc2.metric("Giriş", f"${plan['entry']}")

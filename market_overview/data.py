@@ -2,11 +2,11 @@
 
 import functools
 import time
+from datetime import datetime
 
+import pandas as pd
 import streamlit as st
 import yfinance as yf
-import pandas as pd
-from datetime import datetime
 
 from market_overview.config import STOCK_SECTOR_MAP
 from market_overview.logging_conf import logger

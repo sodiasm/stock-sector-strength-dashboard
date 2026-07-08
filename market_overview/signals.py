@@ -1,11 +1,19 @@
 """Setup tespiti, skorlama ve para akışı sinyalleri."""
 
-import streamlit as st
-import pandas as pd
 import numpy as np
+import pandas as pd
+import streamlit as st
 
 from market_overview.data import fetch_daily
-from market_overview.indicators import compute_adr_pct, compute_ema, compute_mfi, compute_obv, compute_rsi, relative_volume, wilder_atr
+from market_overview.indicators import (
+    compute_adr_pct,
+    compute_ema,
+    compute_mfi,
+    compute_obv,
+    compute_rsi,
+    relative_volume,
+    wilder_atr,
+)
 
 
 def detect_setup(df: pd.DataFrame) -> str:
@@ -212,9 +220,7 @@ def detect_formation(df: pd.DataFrame) -> list:
     formations = []
     close, volume = df["Close"], df["Volume"]
     ema21, ema50 = compute_ema(close, 21), compute_ema(close, 50)
-    rsi = compute_rsi(close)
     last_close = close.iloc[-1]
-    last_rsi = rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50
     avg_vol = volume.iloc[-20:].mean()
 
     a21 = last_close > ema21.iloc[-1]
