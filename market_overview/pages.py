@@ -7,8 +7,15 @@ import plotly.graph_objects as go
 import streamlit as st
 import yfinance as yf
 
+from market_overview.breadth import (
+    defensive_cyclical,
+    distribution_days,
+    market_breadth,
+    sector_rrg,
+)
 from market_overview.charts import make_cloud_chart
 from market_overview.config import (
+    C_ACCENT,
     C_DOWN,
     C_GOLD,
     C_UP,
@@ -239,6 +246,229 @@ def _render_daily_commentary(spx_chg: float, vix_chg: float, ndx_chg: float, sec
 
     st.caption(L("Otomatik üretildi · Yatırım tavsiyesi değildir.",
                  "Auto-generated · Not investment advice."))
+
+
+def _render_market_health():
+    """Düşüş radarı: market breadth + dağıtım günleri + savunma/döngüsel oranı,
+    her biri için o güne özel yorumla."""
+    st.markdown("### " + L("Piyasa Sağlığı — Düşüş Radarı", "Market Health — Decline Radar"))
+    st.caption(L(
+        "Endeks yükselirken içeride bozulmayı yakalar (öncü sinyaller). "
+        f"~{len(SP500_UNIVERSE)} hisse taranır · ilk tarama ~20-30 sn (sonra 30 dk cache).",
+        "Catches internal deterioration while the index still rises (leading signals). "
+        f"~{len(SP500_UNIVERSE)} stocks scanned · first scan ~20-30s (then 30 min cached)."))
+
+    if st.button(L(" Piyasa Sağlığını Analiz Et", " Analyze Market Health"), key="health_btn"):
+        with st.spinner(L("Breadth, dağıtım ve rotasyon hesaplanıyor…",
+                          "Computing breadth, distribution and rotation…")):
+            st.session_state["health_res"] = {
+                "breadth": market_breadth(tuple(SP500_UNIVERSE)),
+                "dist": distribution_days(),
+                "dc": defensive_cyclical(),
+            }
+
+    res = st.session_state.get("health_res")
+    if res is None:
+        st.info(L(" 'Piyasa Sağlığını Analiz Et' butonuna bas.",
+                  " Press 'Analyze Market Health'."))
+        return
+
+    # ---- 1) Market breadth ----
+    breadth = res.get("breadth")
+    if breadth and breadth.get("ma"):
+        cols = st.columns(2)
+        for col, ma in zip(cols, (50, 200)):
+            v = breadth["ma"].get(ma)
+            if not v:
+                continue
+            now, prev = v["now"], v["prev20"]
+            color = C_UP if now >= 70 else (C_GOLD if now >= 50 else C_DOWN)
+            col.markdown(
+                f'<div style="background:rgba(255,255,255,0.03);border:1px solid {color};'
+                f'border-radius:12px;padding:14px;text-align:center;">'
+                f'<div style="font-size:0.8rem;color:#9ca3af;">{L("Hisselerin", "Stocks above")} '
+                f'{ma}MA {L("üstünde", "")}</div>'
+                f'<div style="font-size:1.8rem;font-weight:800;color:{color};">{now:.0f}%</div>'
+                f'<div style="font-size:0.75rem;color:#6b7280;">'
+                f'{L("20g önce", "20d ago")} {prev:.0f}% ({now - prev:+.0f})</div>'
+                f'</div>', unsafe_allow_html=True)
+
+        b200 = breadth["ma"].get(200, {}).get("now", 50)
+        if b200 >= 70:
+            st.success(L(f" **Sağlıklı katılım** — hisselerin %{b200:.0f}'i 200MA üstünde. Geniş tabanlı yükseliş.",
+                         f" **Healthy participation** — {b200:.0f}% of stocks above 200MA. Broad-based uptrend."))
+        elif b200 >= 50:
+            st.warning(L(f" **İzlemeye değer** — %{b200:.0f} 200MA üstünde (50-70 arası nötr bölge).",
+                         f" **Watch** — {b200:.0f}% above 200MA (50-70 is a neutral zone)."))
+        elif b200 >= 30:
+            st.error(L(f" **Zayıf** — sadece %{b200:.0f} 200MA üstünde. Ayı piyasası teyidi (<50).",
+                       f" **Weak** — only {b200:.0f}% above 200MA. Bear confirmation (<50)."))
+        else:
+            st.error(L(f" **Derin düşüş** — %{b200:.0f} 200MA üstünde (<30). Aşırı satım / kapitülasyon bölgesi.",
+                       f" **Deep decline** — {b200:.0f}% above 200MA (<30). Oversold / capitulation zone."))
+
+        if breadth.get("divergence"):
+            st.error(L(
+                " **DIVERGENCE UYARISI:** Endeks (SPX) 20 günde yükselirken breadth düşüyor — "
+                "ralliye az hisse katılıyor. Klasik tepe öncesi erken uyarı.",
+                " **DIVERGENCE WARNING:** SPX rose over 20 days while breadth fell — "
+                "fewer stocks joining the rally. A classic early warning before a top."))
+
+        # 200MA breadth zaman serisi grafiği
+        series = breadth["ma"].get(200, {}).get("series")
+        if series is not None and len(series) > 20:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=series.index, y=series.values, mode="lines",
+                                     line=dict(color=C_ACCENT, width=2), name="200MA breadth"))
+            fig.add_hline(y=70, line=dict(color=C_UP, dash="dot", width=1))
+            fig.add_hline(y=50, line=dict(color=C_GOLD, dash="dot", width=1))
+            fig.add_hline(y=30, line=dict(color=C_DOWN, dash="dot", width=1))
+            fig.update_layout(height=200, margin=dict(l=0, r=0, t=20, b=0),
+                              paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                              yaxis=dict(range=[0, 100], color="#6b7280",
+                                         gridcolor="rgba(255,255,255,0.05)"),
+                              xaxis=dict(color="#6b7280"), showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+
+    # ---- 2) Dağıtım günleri ----
+    dist = res.get("dist")
+    if dist:
+        c = dist["count"]
+        cc = st.columns([1, 3])
+        cc[0].metric(L("Dağıtım Günü", "Distribution Days"), f"{c}", help=L(
+            f"Son {dist['lookback']} seansta kurumsal satış günü", "Institutional selling days in the window"))
+        with cc[1]:
+            if c >= 6:
+                st.error(L(f" **{c} dağıtım günü** — kurumlar agresif satıyor. Güçlü tepe/düşüş uyarısı.",
+                           f" **{c} distribution days** — institutions selling hard. Strong top/decline warning."))
+            elif c >= 4:
+                st.warning(L(f" **{c} dağıtım günü** — kurumsal satış birikiyor. Dikkatli ol.",
+                             f" **{c} distribution days** — institutional selling building. Be cautious."))
+            else:
+                st.success(L(f" **{c} dağıtım günü** — kurumsal satış baskısı düşük. Sağlıklı.",
+                             f" **{c} distribution days** — low institutional selling. Healthy."))
+        st.caption(L("Dağıtım günü = kapanış ≤ -%0.2 ve hacim önceki günden yüksek (SPY, O'Neil).",
+                     "Distribution day = close ≤ -0.2% on higher volume than prior day (SPY, O'Neil)."))
+
+    # ---- 3) Savunma / Döngüsel ----
+    dc = res.get("dc")
+    if dc:
+        cyc, deff = dc["cyclical_ret20"], dc["defensive_ret20"]
+        if dc["risk_on"]:
+            st.success(L(
+                f" **Risk-On rotasyonu:** Döngüseller (XLK/XLY/XLI/XLF, {cyc:+.1f}%) savunmayı "
+                f"(XLP/XLU/XLV, {deff:+.1f}%) yeniyor. Para riske dönüyor — sağlıklı.",
+                f" **Risk-On rotation:** Cyclicals (XLK/XLY/XLI/XLF, {cyc:+.1f}%) beat defensives "
+                f"(XLP/XLU/XLV, {deff:+.1f}%). Money moving to risk — healthy."))
+        else:
+            st.error(L(
+                f" **Risk-Off eğilimi:** Savunma sektörleri (XLP/XLU/XLV, {deff:+.1f}%) döngüselleri "
+                f"(XLK/XLY/XLI/XLF, {cyc:+.1f}%) geçiyor. Para güvenliğe kaçıyor — düşüş öncesi uyarı.",
+                f" **Risk-Off tilt:** Defensives (XLP/XLU/XLV, {deff:+.1f}%) leading cyclicals "
+                f"(XLK/XLY/XLI/XLF, {cyc:+.1f}%). Money fleeing to safety — a pre-decline warning."))
+        st.caption(L(f"XLY/XLP oranı 20 günlük eğim: {dc['ratio_slope20']:+.1f}% "
+                     "(pozitif = risk iştahı, negatif = savunmaya kaçış).",
+                     f"XLY/XLP ratio 20-day slope: {dc['ratio_slope20']:+.1f}% "
+                     "(positive = risk appetite, negative = flight to safety)."))
+
+
+def _render_rrg():
+    """Sektör rotasyonu — Relative Rotation Graph (RRG) + para nereye kayıyor yorumu."""
+    st.markdown("### " + L("Sektör Rotasyonu — RRG", "Sector Rotation — RRG"))
+    st.caption(L(
+        "Her sektör ETF'i SPY'a karşı: güç (RS-Ratio, yatay) ve ivme (RS-Momentum, dikey). "
+        "Saat yönünde döner. Merkez (100,100). Kuyruk son ~8 günün yolu.",
+        "Each sector ETF vs SPY: strength (RS-Ratio, x) and momentum (RS-Momentum, y). "
+        "Rotates clockwise. Center at (100,100). The tail is the last ~8 days' path."))
+
+    if st.button(L(" Rotasyonu Analiz Et (RRG)", " Analyze Rotation (RRG)"), key="rrg_btn"):
+        with st.spinner(L("RRG hesaplanıyor…", "Computing RRG…")):
+            st.session_state["rrg_res"] = sector_rrg()
+
+    rrg = st.session_state.get("rrg_res")
+    if rrg is None:
+        if "rrg_res" in st.session_state:
+            st.info(L("RRG verisi alınamadı — tekrar dene.", "RRG data unavailable — try again."))
+        else:
+            st.info(L(" 'Rotasyonu Analiz Et (RRG)' butonuna bas.", " Press 'Analyze Rotation (RRG)'."))
+        return
+
+    quad_color = {"Leading": C_UP, "Weakening": C_GOLD, "Lagging": C_DOWN, "Improving": C_ACCENT}
+    quad_tr = {"Leading": "Lider", "Weakening": "Zayıflıyor", "Lagging": "Geride", "Improving": "Toparlıyor"}
+
+    xs = [p for d in rrg.values() for p in d["tail_x"]]
+    ys = [p for d in rrg.values() for p in d["tail_y"]]
+    xpad = max(1.0, (max(xs) - min(xs)) * 0.1)
+    ypad = max(1.0, (max(ys) - min(ys)) * 0.1)
+    x0, x1 = min(min(xs), 100) - xpad, max(max(xs), 100) + xpad
+    y0, y1 = min(min(ys), 100) - ypad, max(max(ys), 100) + ypad
+
+    fig = go.Figure()
+    # Çeyrek arka planları
+    fig.add_shape(type="rect", x0=100, y0=100, x1=x1, y1=y1, fillcolor="rgba(22,199,132,0.07)", line_width=0)
+    fig.add_shape(type="rect", x0=100, y0=y0, x1=x1, y1=100, fillcolor="rgba(240,185,11,0.07)", line_width=0)
+    fig.add_shape(type="rect", x0=x0, y0=y0, x1=100, y1=100, fillcolor="rgba(234,57,67,0.07)", line_width=0)
+    fig.add_shape(type="rect", x0=x0, y0=100, x1=100, y1=y1, fillcolor="rgba(59,130,246,0.07)", line_width=0)
+    fig.add_vline(x=100, line=dict(color="rgba(255,255,255,0.2)", width=1))
+    fig.add_hline(y=100, line=dict(color="rgba(255,255,255,0.2)", width=1))
+    # Çeyrek etiketleri
+    fig.add_annotation(x=x1, y=y1, text=L("Lider", "Leading"), showarrow=False,
+                       xanchor="right", yanchor="top", font=dict(color=C_UP, size=11))
+    fig.add_annotation(x=x1, y=y0, text=L("Zayıflıyor", "Weakening"), showarrow=False,
+                       xanchor="right", yanchor="bottom", font=dict(color=C_GOLD, size=11))
+    fig.add_annotation(x=x0, y=y0, text=L("Geride", "Lagging"), showarrow=False,
+                       xanchor="left", yanchor="bottom", font=dict(color=C_DOWN, size=11))
+    fig.add_annotation(x=x0, y=y1, text=L("Toparlıyor", "Improving"), showarrow=False,
+                       xanchor="left", yanchor="top", font=dict(color=C_ACCENT, size=11))
+
+    for etf, d in rrg.items():
+        col = quad_color[d["quadrant"]]
+        fig.add_trace(go.Scatter(
+            x=d["tail_x"], y=d["tail_y"], mode="lines", line=dict(color=col, width=1.5),
+            opacity=0.5, showlegend=False, hoverinfo="skip"))
+        fig.add_trace(go.Scatter(
+            x=[d["x"]], y=[d["y"]], mode="markers+text", text=[etf],
+            textposition="top center", textfont=dict(color=col, size=11),
+            marker=dict(color=col, size=11, line=dict(color="#0b0f1a", width=1)),
+            name=etf, showlegend=False,
+            hovertemplate=f"{etf} — {d['name']}<br>RS-Ratio %{{x:.1f}}<br>RS-Mom %{{y:.1f}}<extra></extra>"))
+
+    fig.update_layout(height=460, margin=dict(l=0, r=0, t=10, b=0),
+                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                      xaxis=dict(range=[x0, x1], title="RS-Ratio", color="#6b7280",
+                                 gridcolor="rgba(255,255,255,0.04)", zeroline=False),
+                      yaxis=dict(range=[y0, y1], title="RS-Momentum", color="#6b7280",
+                                 gridcolor="rgba(255,255,255,0.04)", zeroline=False))
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Para nereye kayıyor yorumu
+    by_q = {"Leading": [], "Weakening": [], "Lagging": [], "Improving": []}
+    for etf, d in rrg.items():
+        by_q[d["quadrant"]].append(f"{d['name']} ({etf})")
+
+    def _join(items):
+        return ", ".join(items) if items else L("—", "—")
+
+    st.markdown(L("**Para nereye kayıyor?**", "**Where is money rotating?**"))
+    inflow = by_q["Improving"] + by_q["Leading"]
+    outflow = by_q["Weakening"] + by_q["Lagging"]
+    st.success(L(f" **Para GİRİŞİ (güçlü/toparlayan):** {_join(inflow)}",
+                 f" **INFLOW (strong/improving):** {_join(inflow)}"))
+    st.error(L(f" **Para ÇIKIŞI (zayıf/zayıflayan):** {_join(outflow)}",
+               f" **OUTFLOW (weak/weakening):** {_join(outflow)}"))
+
+    for q in ("Leading", "Improving", "Weakening", "Lagging"):
+        if by_q[q]:
+            label = L(quad_tr[q], q)
+            hint = {
+                "Leading": L("güçlü + hızlanıyor — liderler", "strong + accelerating — leaders"),
+                "Improving": L("zayıf ama toparlıyor — erken giriş adayı", "weak but improving — early-entry candidates"),
+                "Weakening": L("güçlü ama yavaşlıyor — kâr-al bölgesi", "strong but slowing — take-profit zone"),
+                "Lagging": L("zayıf + yavaşlıyor — kaçın", "weak + decelerating — avoid"),
+            }[q]
+            st.markdown(f'<span style="color:{quad_color[q]};">●</span> **{label}** '
+                        f'<span style="color:#6b7280;font-size:0.85rem;">({hint})</span>: {_join(by_q[q])}',
+                        unsafe_allow_html=True)
 
 
 def page_market_pulse(tickers):
@@ -692,6 +922,16 @@ def page_market_pulse(tickers):
             else:
                 st.caption(L("Bu vadelerde olağandışı kontrat yok.",
                              "No unusual contracts in these expiries."))
+
+    st.divider()
+
+    # ---------- 7d) PİYASA SAĞLIĞI (DÜŞÜŞ RADARI) ----------
+    _render_market_health()
+
+    st.divider()
+
+    # ---------- 7e) SEKTÖR ROTASYONU (RRG) ----------
+    _render_rrg()
 
     st.divider()
 
