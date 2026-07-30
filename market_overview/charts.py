@@ -46,13 +46,13 @@ def make_ut_chart(df: pd.DataFrame, title: str) -> go.Figure:
     fig.add_hline(y=70, line=dict(color="rgba(234,57,67,0.5)", dash="dash"), row=3, col=1)
     fig.add_hline(y=30, line=dict(color="rgba(22,199,132,0.5)", dash="dash"), row=3, col=1)
 
-    fig.update_layout(title=title, template="plotly_dark",
-                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(13,17,28,1)",
+    fig.update_layout(title=title, template="plotly_white",
+                      paper_bgcolor="#f6f1e8", plot_bgcolor="#fbf8f2",
                       height=640, xaxis_rangeslider_visible=False,
                       legend=dict(orientation="h", y=1.02, x=1, xanchor="right"),
                       margin=dict(l=10, r=10, t=50, b=10))
-    fig.update_yaxes(gridcolor="rgba(255,255,255,0.05)")
-    fig.update_xaxes(gridcolor="rgba(255,255,255,0.05)")
+    fig.update_yaxes(gridcolor="rgba(32,35,34,0.10)")
+    fig.update_xaxes(gridcolor="rgba(32,35,34,0.08)")
     return fig
 
 
@@ -60,8 +60,8 @@ def make_equity_chart(equity_curve, index) -> go.Figure:
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=index, y=equity_curve, fill="tozeroy",
                   line=dict(color=C_ACCENT, width=2), name="Portföy"))
-    fig.update_layout(title="Portföy Değeri (Equity Curve)", template="plotly_dark",
-                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(13,17,28,1)",
+    fig.update_layout(title="Portföy Değeri (Equity Curve)", template="plotly_white",
+                      paper_bgcolor="#f6f1e8", plot_bgcolor="#fbf8f2",
                       height=260, margin=dict(l=10, r=10, t=40, b=10))
     return fig
 
@@ -107,10 +107,10 @@ def make_cloud_chart(df: pd.DataFrame, title: str) -> go.Figure:
     fig.add_trace(go.Scatter(x=df.index, y=df["Volume"].rolling(50).mean(), name="Hacim Ort.",
                   line=dict(color=C_GOLD, width=1)), row=2, col=1)
 
-    fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
-                      plot_bgcolor="rgba(13,17,28,1)", height=600, xaxis_rangeslider_visible=False,
+    fig.update_layout(template="plotly_white", paper_bgcolor="#f6f1e8",
+                      plot_bgcolor="#fbf8f2", height=600, xaxis_rangeslider_visible=False,
                       legend=dict(orientation="h", y=1.03, x=1, xanchor="right", font=dict(size=11)),
                       margin=dict(l=10, r=10, t=50, b=10), hovermode="x unified")
-    fig.update_yaxes(gridcolor="rgba(255,255,255,0.05)")
-    fig.update_xaxes(gridcolor="rgba(255,255,255,0.04)")
+    fig.update_yaxes(gridcolor="rgba(32,35,34,0.10)")
+    fig.update_xaxes(gridcolor="rgba(32,35,34,0.08)")
     return fig

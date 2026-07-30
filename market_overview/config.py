@@ -81,19 +81,19 @@ SP500_UNIVERSE = sorted(set(NASDAQ100 + [
 ]))
 
 
-C_UP = "#16c784"
+C_UP = "#2f7d5c"
 
 
-C_DOWN = "#ea3943"
+C_DOWN = "#b94a46"
 
 
-C_ACCENT = "#3b82f6"
+C_ACCENT = "#344f70"
 
 
-C_PURPLE = "#a855f7"
+C_PURPLE = "#6f628f"
 
 
-C_GOLD = "#f0b90b"
+C_GOLD = "#b87932"
 
 
 MACRO_ASSETS = {
@@ -108,6 +108,12 @@ MACRO_ASSETS = {
     "GC=F":  "Altın",
     "CL=F":  "Petrol",
     "BTC-USD": "Bitcoin",
+}
+
+MACRO_ASSETS_EN = {
+    "^GSPC": "S&P 500", "^IXIC": "Nasdaq", "QQQ": "QQQ (Nasdaq ETF)", "^DJI": "Dow Jones",
+    "^RUT": "Russell 2000", "^VIX": "VIX (Fear)", "^TNX": "10Y Yield", "DX-Y.NYB": "Dollar (DXY)",
+    "GC=F": "Gold", "CL=F": "Oil", "BTC-USD": "Bitcoin",
 }
 
 
@@ -136,6 +142,8 @@ GLOBAL_INDICES = {
     },
 }
 
+GLOBAL_REGIONS_EN = {"Amerika": "Americas", "Avrupa": "Europe", "Asya-Pasifik": "Asia-Pacific"}
+
 
 SECTOR_ETFS = {
     "XLK": "Teknoloji",
@@ -149,6 +157,12 @@ SECTOR_ETFS = {
     "XLU": "Kamu Hizmetleri",
     "XLRE": "Gayrimenkul",
     "XLC": "İletişim",
+}
+
+SECTOR_ETFS_EN = {
+    "XLK": "Technology", "XLF": "Financials", "XLE": "Energy", "XLV": "Health Care",
+    "XLY": "Consumer Discretionary", "XLP": "Consumer Staples", "XLI": "Industrials",
+    "XLB": "Materials", "XLU": "Utilities", "XLRE": "Real Estate", "XLC": "Communication Services",
 }
 
 

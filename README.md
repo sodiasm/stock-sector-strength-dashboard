@@ -25,8 +25,8 @@ Before opening any position, a trader needs context: How are the indices? Is VIX
 
 ## 🛠️ Features
 
-**Bilingual UI (TR / EN)**
-Switch the interface language between Turkish and English from the sidebar — the whole dashboard re-renders instantly.
+**Bilingual UI (繁體中文 / English)**
+Switch the interface language from the sidebar. Traditional Chinese is the default for each new session.
 
 **Daily Macro Summary**
 Live values and daily change for S&P 500, Nasdaq, Dow, Russell 2000, VIX, 10-year yield, DXY, Gold, Oil, and Bitcoin — with a **Risk-On / Risk-Off banner** (green when indices are up and VIX is down; red otherwise).
@@ -47,8 +47,6 @@ Is the S&P 500 above or below its 200-day moving average? Green banner = bull re
 NVDA, META, TSLA, AMZN, AAPL, MSFT — the market's barometer stocks.
 
 **Momentum & Setup Scanners**
-- **Gap-Up Scanner** — finds stocks opening ≥3% above prior close (Episodic Pivot candidates)
-- **Volume Anomaly Scanner** — flags stocks trading at 3x+ their 20-day average volume (tracking institutional footprints)
 - **Qullamaggie-style Momentum Scan** — filters a broad universe by 1-year performance, relative strength, and ADR%
 - **Minervini Trend Template** check per stock
 
@@ -76,8 +74,9 @@ A plain-language summary generated from the collected data: How is the market? I
 # The repo name starts with a dash, so clone into a plain folder name:
 git clone https://github.com/bugra123uysal/-Market_Overview_Dashboard.git market-overview-dashboard
 cd market-overview-dashboard
-pip install -r requirements.txt
-streamlit run trading_app.py
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m streamlit run trading_app.py
 ```
 
 `trading_app.py` is a thin entry point; the application lives in the
@@ -92,13 +91,14 @@ market_overview/
 ├── security.py       # sanitize_tickers — user-input validation
 ├── indicators.py     # EMA, RSI, MFI, OBV, ATR, RVOL, ADR%, trend template
 ├── signals.py        # setup detection, scoring, whale/flow signals
-├── data.py           # yfinance/FINRA fetch, options flow, retry decorator
+├── data.py           # yfinance fetch and retry decorator
+├── persistence.py    # local daily sector JSON/CSV snapshots
 ├── scanners.py       # market / momentum / Qullamaggie scanners
 ├── backtest.py       # backtest + trade-plan builder
 ├── charts.py         # Plotly chart builders
 ├── pages.py          # Streamlit page/section renderers
 └── logging_conf.py   # central logger
-trading_app.py        # thin Streamlit entry point (Streamlit Cloud target)
+trading_app.py        # thin local Streamlit entry point
 tests/                # network-free pytest suite
 .github/workflows/    # CI (ruff + import sanity + pytest)
 ```
@@ -107,12 +107,13 @@ tests/                # network-free pytest suite
 
 ```mermaid
 flowchart LR
-    A["yfinance / FINRA"] -->|data.py| B["Raw OHLCV · options · short-vol"]
+    A["yfinance"] -->|data.py| B["Raw OHLCV"]
     B -->|indicators.py| C["Indicators<br/>EMA · RSI · ATR · RVOL"]
     C -->|signals.py| D["Setups & Scores"]
     B --> E["Scanners<br/>market · momentum · Qullamaggie"]
     C --> E
     D --> E
+    B --> H["persistence.py → daily JSON/CSV"]
     C --> F["charts.py<br/>Plotly"]
     D --> G["pages.py → Streamlit UI"]
     E --> G
@@ -165,8 +166,6 @@ Son 5 günün VIX kapanışları, korku bölgeleriyle: 20 altı = sakin, 20–30
 NVDA, META, TSLA, AMZN, AAPL, MSFT — piyasanın barometre hisseleri.
 
 **Momentum ve Setup Tarayıcıları**
-- **Gap-Up Tarayıcı** — önceki kapanışın %3+ üstünde açılan hisseler (Episodik Pivot adayları)
-- **Hacim Anomalisi Tarayıcı** — 20 günlük ortalama hacminin 3 katı üzerinde işlem görenler (kurumsal para izini sürmek için)
 - **Qullamaggie tarzı momentum taraması** — geniş evreni 1 yıllık performans, göreli güç (RS) ve ADR%'ye göre filtreler
 - Hisse başına **Minervini Trend Template** kontrolü
 
@@ -185,8 +184,9 @@ Toplanan verilere dayalı düz yazı özet: Piyasa nasıl? Risk var mı? Hangi s
 # Repo adı tire ile başlar; düz bir klasör adına klonlayın:
 git clone https://github.com/bugra123uysal/-Market_Overview_Dashboard.git market-overview-dashboard
 cd market-overview-dashboard
-pip install -r requirements.txt
-streamlit run trading_app.py
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m streamlit run trading_app.py
 ```
 
 `trading_app.py` ince bir giriş noktasıdır; uygulama `market_overview/`

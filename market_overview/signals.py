@@ -24,17 +24,11 @@ def detect_setup(df: pd.DataFrame) -> str:
     ema10 = compute_ema(c, 10)
     ema20 = compute_ema(c, 20)
     price  = float(c.iloc[-1])
-    open_  = float(df["Open"].iloc[-1])
     above_cloud = price > ema10.iloc[-1] > ema20.iloc[-1]
 
     vol_now = float(df["Volume"].iloc[-1])
     vol_avg = float(df["Volume"].iloc[-20:].mean())
     rvol    = vol_now / vol_avg if vol_avg > 0 else 1.0
-
-    # Episodic Pivot: gün içi gap %4+ ve hacim 2.5x+
-    gap_pct = (open_ - float(c.iloc[-2])) / float(c.iloc[-2]) * 100 if len(c) >= 2 else 0
-    if gap_pct >= 4.0 and rvol >= 2.5:
-        return " Episodik Pivot"
 
     # Konsolidasyon + Kırılım
     recent = c.iloc[-10:]
@@ -82,14 +76,6 @@ def explain_trade(setup: str, df: pd.DataFrame) -> dict:
         neden  = ("Hacimli kırılım: fiyat konsolidasyon tepesini yüksek hacimle geçti. "
                   "Kurumsal alım baskısı var.")
         bekle  = "Kapanış kırılım seviyesinin üstünde olmalı. Düşük hacimli kırılım = sahte."
-
-    elif "Episodik" in setup:
-        entry  = round(price, 2)
-        stop   = round(float(lo.iloc[-1]) * 0.98, 2)
-        target = round(entry * 1.25, 2)
-        neden  = ("Episodik Pivot: büyük hacimli gap-up. Kurumlar hisseyi yeniden fiyatlıyor. "
-                  "Birkaç günde %20-50 gelebilir.")
-        bekle  = "Gap dolmazsa güçlü. Gap tamamen kapanırsa setup bozulmuş — çık."
 
     elif "EMA Geri" in setup:
         entry  = round(ema10 * 1.005, 2)

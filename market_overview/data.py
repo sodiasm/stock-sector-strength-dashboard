@@ -1,9 +1,7 @@
-"""yfinance/FINRA veri çekme ve opsiyon/short-volume yardımcıları."""
+"""Yahoo Finance data fetching helpers."""
 
 import functools
 import time
-from datetime import datetime
-
 import pandas as pd
 import streamlit as st
 import yfinance as yf
@@ -104,95 +102,3 @@ def fetch_data(ticker: str, period: str, interval: str) -> pd.DataFrame | None:
     return df.dropna()
 
 
-@st.cache_data(ttl=1800)
-def options_flow(ticker: str, max_expiries: int = 3) -> dict:
-    """
-    yfinance opsiyon zinciriyle ücretsiz opsiyon-akışı vekili.
-    Gerçek 'flow' (paralı feed) değildir; kamuya açık hacim + açık pozisyon
-    (OI) verisinden Put/Call dengesi ve olağandışı kontratları çıkarır.
-    Olağandışı = günlük hacim > mevcut OI (yeni pozisyon akını) ve hacim >= 500.
-    """
-    try:
-        tk = yf.Ticker(ticker)
-        expiries = list(tk.options[:max_expiries])
-    except Exception as e:
-        logger.warning("%s opsiyon vadeleri çekilemedi: %s", ticker, e)
-        return {"ok": False}
-    if not expiries:
-        return {"ok": False}
-
-    call_vol = put_vol = call_oi = put_oi = 0.0
-    unusual = []
-    for exp in expiries:
-        try:
-            chain = tk.option_chain(exp)
-        except Exception as e:
-            logger.warning("%s %s opsiyon zinciri çekilemedi: %s", ticker, exp, e)
-            continue
-        for df_o, is_call in ((chain.calls, True), (chain.puts, False)):
-            if df_o is None or df_o.empty:
-                continue
-            v = df_o["volume"].fillna(0)
-            oi = df_o["openInterest"].fillna(0)
-            if is_call:
-                call_vol += float(v.sum()); call_oi += float(oi.sum())
-            else:
-                put_vol += float(v.sum()); put_oi += float(oi.sum())
-            udf = df_o.assign(volume=v, openInterest=oi)
-            mask = (udf["volume"] > udf["openInterest"]) & (udf["volume"] >= 500)
-            for _, row in udf[mask].iterrows():
-                unusual.append({
-                    "Yön": "CALL" if is_call else "PUT",
-                    "Vade": exp,
-                    "Strike": float(row["strike"]),
-                    "Hacim": int(row["volume"]),
-                    "OI": int(row["openInterest"]),
-                    "Son $": round(float(row.get("lastPrice", 0) or 0), 2),
-                })
-    total_vol = call_vol + put_vol
-    if total_vol <= 0:
-        return {"ok": False}
-    unusual.sort(key=lambda x: x["Hacim"], reverse=True)
-    return {
-        "ok": True,
-        "call_vol": call_vol, "put_vol": put_vol,
-        "call_oi": call_oi, "put_oi": put_oi,
-        "pc_ratio": (put_vol / call_vol) if call_vol > 0 else None,
-        "unusual": unusual[:15],
-        "expiries": expiries,
-    }
-
-
-@st.cache_data(ttl=3600)
-def finra_short_volume(symbols_tuple: tuple) -> dict:
-    """
-    FINRA'nın günlük konsolide short-hacim dosyası (CNMSshvol).
-    Ücretsiz ve resmidir; borsa-dışı (off-exchange / dark pool) aktivite için
-    sektörde yaygın kullanılan vekil göstergedir. Gerçek dark pool print'i
-    değildir — short hacmin toplam hacme oranını verir (bir günlük gecikmeli).
-    """
-    import io
-    import urllib.request
-    from datetime import timedelta
-
-    base = "https://cdn.finra.org/equity/regsho/daily/CNMSshvol{}.txt"
-    day = datetime.now()
-    for _ in range(6):  # en yakın yayınlanmış işlem gününü bul
-        url = base.format(day.strftime("%Y%m%d"))
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            raw = urllib.request.urlopen(req, timeout=12).read().decode("utf-8", "ignore")
-            header = raw.split("\n", 1)[0]
-            if "Symbol" in header:
-                df = pd.read_csv(io.StringIO(raw), sep="|")
-                df = df[df["Symbol"].notna() & (df["Symbol"] != "Total")]
-                sub = df[df["Symbol"].isin(symbols_tuple)].copy()
-                if sub.empty:
-                    return {"ok": False, "reason": "havuzdaki hisseler dosyada yok"}
-                sub["Short %"] = (sub["ShortVolume"] / sub["TotalVolume"] * 100).round(1)
-                sub = sub.sort_values("Short %", ascending=False)
-                return {"ok": True, "date": day.strftime("%d.%m.%Y"), "df": sub}
-        except Exception as e:
-            logger.warning("FINRA short-hacim %s çekilemedi: %s", day.strftime("%Y%m%d"), e)
-        day -= timedelta(days=1)
-    return {"ok": False, "reason": "FINRA verisi çekilemedi"}

@@ -5,7 +5,6 @@ from datetime import datetime
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-import yfinance as yf
 
 from market_overview.breadth import (
     defensive_cyclical,
@@ -20,14 +19,18 @@ from market_overview.config import (
     C_GOLD,
     C_UP,
     GLOBAL_INDICES,
+    GLOBAL_REGIONS_EN,
     MACRO_ASSETS,
+    MACRO_ASSETS_EN,
     MOMENTUM_UNIVERSE,
     NASDAQ100,
     SECTOR_ETFS,
+    SECTOR_ETFS_EN,
     SP500_UNIVERSE,
 )
-from market_overview.data import fetch_daily, finra_short_volume, options_flow
+from market_overview.data import fetch_daily
 from market_overview.i18n import L
+from market_overview.persistence import save_daily_sector_snapshot
 from market_overview.scanners import scan_qullamaggie_yf
 from market_overview.signals import detect_setup, explain_trade
 
@@ -253,8 +256,8 @@ def _render_market_health():
     her biri için o güne özel yorumla."""
     st.markdown("### " + L("Piyasa Sağlığı — Düşüş Radarı", "Market Health — Decline Radar"))
     st.caption(L(
-        "Endeks yükselirken içeride bozulmayı yakalar (öncü sinyaller). "
-        f"~{len(SP500_UNIVERSE)} hisse taranır · ilk tarama ~20-30 sn (sonra 30 dk cache).",
+        "指數上升時捕捉市場內部轉弱的早期訊號。"
+        f"約掃描 {len(SP500_UNIVERSE)} 檔股票；首次掃描約 20–30 秒（之後快取 30 分鐘）。",
         "Catches internal deterioration while the index still rises (leading signals). "
         f"~{len(SP500_UNIVERSE)} stocks scanned · first scan ~20-30s (then 30 min cached)."))
 
@@ -376,8 +379,8 @@ def _render_rrg():
     """Sektör rotasyonu — Relative Rotation Graph (RRG) + para nereye kayıyor yorumu."""
     st.markdown("### " + L("Sektör Rotasyonu — RRG", "Sector Rotation — RRG"))
     st.caption(L(
-        "Her sektör ETF'i SPY'a karşı: güç (RS-Ratio, yatay) ve ivme (RS-Momentum, dikey). "
-        "Saat yönünde döner. Merkez (100,100). Kuyruk son ~8 günün yolu.",
+        "每個 sector ETF 相對 SPY 的強度（RS-Ratio，橫軸）與動能（RS-Momentum，縱軸）。"
+        "圖表順時針輪動，中心為 (100,100)，尾線代表最近約 8 日的路徑。",
         "Each sector ETF vs SPY: strength (RS-Ratio, x) and momentum (RS-Momentum, y). "
         "Rotates clockwise. Center at (100,100). The tail is the last ~8 days' path."))
 
@@ -476,9 +479,7 @@ def page_market_pulse(tickers):
         '<div class="page-header">'
         '<h2> ' + L("Piyasa Nabzı", "Market Pulse") + '</h2>'
         '<p>' + L(
-            "S&P500, VIX, faiz, dolar ve sektör rotasyonu tek bakışta. "
-            "Önce piyasayı oku — Risk-On mu Risk-Off mu — sonra işlem planı yap. "
-            "Qullamaggie'nin birinci kuralı: <b>piyasa aleyhine işlem açma.</b>",
+            "S&P 500、VIX、利率、美元與 sector 輪動一目了然。先讀市場：Risk-On 還是 Risk-Off，然後制定交易計劃。<b>不要逆勢交易。</b>",
             "S&P 500, VIX, rates, dollar and sector rotation at a glance. "
             "Read the market first — Risk-On or Risk-Off — then plan your trade. "
             "Qullamaggie's first rule: <b>don't trade against the market.</b>")
@@ -514,7 +515,7 @@ def page_market_pulse(tickers):
         if sym == "^GSPC": spx_chg = chg
         if sym == "^VIX":  vix_chg = chg
         if sym == "^IXIC": ndx_chg = chg
-        macro_rows.append({"Varlık": name, "Fiyat": round(float(df["Close"].iloc[-1]), 2),
+        macro_rows.append({"Varlık": L(name, MACRO_ASSETS_EN[sym]), "Fiyat": round(float(df["Close"].iloc[-1]), 2),
                            "Günlük %": round(float(chg), 2)})
     if macro_rows:
         cols = st.columns(5)
@@ -548,12 +549,17 @@ def page_market_pulse(tickers):
             continue
         d1 = (df["Close"].iloc[-1] - df["Close"].iloc[-2]) / df["Close"].iloc[-2] * 100
         d5 = (df["Close"].iloc[-1] - df["Close"].iloc[-6]) / df["Close"].iloc[-6] * 100
-        sec_rows.append({"Sektör": name, "Sembol": sym,
+        sec_rows.append({"Sektör": L(name, SECTOR_ETFS_EN[sym]), "Sembol": sym,
                         "Günlük %": round(float(d1), 2), "Haftalık %": round(float(d5), 2)})
 
     sec_df = pd.DataFrame()
     if sec_rows:
         sec_df = pd.DataFrame(sec_rows).sort_values("Haftalık %", ascending=False)
+        try:
+            save_daily_sector_snapshot(sec_df)
+        except (OSError, ValueError) as exc:
+            st.warning(L(f"每日 sector 資料保存失敗：{exc}",
+                         f"Could not save the daily sector snapshot: {exc}"))
         best = sec_df.iloc[0]; worst = sec_df.iloc[-1]
         st.markdown(
             f" **{L('Para girişi', 'Inflow')}:** {best['Sektör']} "
@@ -590,7 +596,7 @@ def page_market_pulse(tickers):
     # ---------- 2b) DÜNYA BORSALARI ----------
     st.markdown("### " + L("Dünya Borsaları", "Global Markets"))
     for bolge, indices in GLOBAL_INDICES.items():
-        st.markdown(f"**{bolge}**")
+        st.markdown(f"**{L(bolge, GLOBAL_REGIONS_EN[bolge])}**")
         cols = st.columns(len(indices))
         for col, (sym, meta) in zip(cols, indices.items()):
             gdf = fetch_daily(sym, "5d")
@@ -621,8 +627,8 @@ def page_market_pulse(tickers):
     if failed_syms:
         _syms = f"{', '.join(failed_syms[:12])}{'…' if len(failed_syms) > 12 else ''}"
         st.info(L(
-            f" {len(failed_syms)} sembol çekilemedi: {_syms} "
-            "— Yahoo Finance geçici olarak yanıt vermemiş olabilir; 'Yenile' deneyin.",
+            f" {len(failed_syms)} 個代號無法載入：{_syms} "
+            "— Yahoo Finance 可能暫時無法回應，請稍後再重新整理。",
             f" {len(failed_syms)} symbols failed to load: {_syms} "
             "— Yahoo Finance may be temporarily unavailable; try 'Refresh'."))
 
@@ -720,208 +726,6 @@ def page_market_pulse(tickers):
             col.caption(f"{sym}: {L('veri yok', 'no data')}")
 
     st.divider()
-
-    # ---------- 6) GAP-UP TARAYICI ----------
-    st.markdown("### " + L("Gap-Up Açılanlar — Olası EP Fırsatları",
-                           "Gap-Up Openers — Possible EP Opportunities"))
-    st.caption(L("Bugün önceki kapanışa göre %3+ gap-up ile açılan hisseler.",
-                 "Stocks opening 3%+ above the prior close today."))
-
-    @st.cache_data(ttl=1800)
-    def _scan_gap_ups(universe_tuple):
-        gaps = []
-        for t in universe_tuple:
-            try:
-                df_g = yf.download(t, period="5d", interval="1d", progress=False, auto_adjust=True)
-                if df_g is None or len(df_g) < 2:
-                    continue
-                df_g.columns = [c[0] if isinstance(c, tuple) else c for c in df_g.columns]
-                prev_close = float(df_g["Close"].iloc[-2])
-                today_open = float(df_g["Open"].iloc[-1])
-                gap_pct = (today_open - prev_close) / prev_close * 100
-                if gap_pct >= 3.0:
-                    vol_avg = float(df_g["Volume"].iloc[-6:-1].mean()) if len(df_g) >= 6 else float(df_g["Volume"].mean())
-                    vol_ratio = float(df_g["Volume"].iloc[-1]) / vol_avg if vol_avg > 0 else 1.0
-                    gaps.append({"Hisse": t, "Gap %": round(gap_pct, 2), "Hacim Oranı": round(vol_ratio, 2)})
-            except Exception:
-                continue
-        gaps.sort(key=lambda x: x["Gap %"], reverse=True)
-        return gaps
-
-    if st.button(L(" Gap-Up Tara", " Scan Gap-Ups"), key="gap_scan_btn"):
-        with st.spinner(L("Gap-up taranıyor...", "Scanning gap-ups...")):
-            gaps = _scan_gap_ups(tuple(MOMENTUM_UNIVERSE))
-        st.session_state["gap_up_results"] = gaps
-
-    gap_results = st.session_state.get("gap_up_results")
-    if gap_results is not None:
-        if not gap_results:
-            st.info(L("Bugün %3+ gap-up açılan hisse bulunamadı.",
-                      "No stocks gapped up 3%+ today."))
-        else:
-            gcols = st.columns(min(4, len(gap_results)))
-            for col, r in zip(gcols * 10, gap_results[:8]):
-                col.markdown(
-                    f'<div style="background:rgba(240,185,11,0.10);border:1px solid #f0b90b;'
-                    f'border-radius:10px;padding:10px;text-align:center;margin-bottom:8px;">'
-                    f'<div style="font-weight:800;color:#fff;">{r["Hisse"]}</div>'
-                    f'<div style="color:#f0b90b;font-size:0.95rem;font-weight:700;">Gap {r["Gap %"]:+.2f}%</div>'
-                    f'<div style="color:#9ca3af;font-size:0.75rem;">{r["Hacim Oranı"]}x {L("hacim", "volume")}</div>'
-                    f'</div>', unsafe_allow_html=True)
-
-    st.divider()
-
-    # ---------- 7) HACİM ANOMALİSİ ----------
-    st.markdown("### " + L("Hacim Anomalisi — Olağandışı Hareketler",
-                           "Volume Anomaly — Unusual Moves"))
-    st.caption(L("Günlük hacmi 20 günlük ortalamanın 3 katını aşan hisseler.",
-                 "Stocks trading at 3x+ their 20-day average volume."))
-
-    @st.cache_data(ttl=1800)
-    def _scan_volume_anomaly(universe_tuple):
-        anomalies = []
-        for t in universe_tuple:
-            try:
-                df_v = yf.download(t, period="3mo", interval="1d", progress=False, auto_adjust=True)
-                if df_v is None or len(df_v) < 22:
-                    continue
-                df_v.columns = [c[0] if isinstance(c, tuple) else c for c in df_v.columns]
-                vol_avg = float(df_v["Volume"].iloc[-21:-1].mean())
-                vol_today = float(df_v["Volume"].iloc[-1])
-                rvol = vol_today / vol_avg if vol_avg > 0 else 1.0
-                if rvol >= 3.0:
-                    price = float(df_v["Close"].iloc[-1])
-                    chg = (price - float(df_v["Close"].iloc[-2])) / float(df_v["Close"].iloc[-2]) * 100
-                    anomalies.append({"Hisse": t, "RVOL": round(rvol, 2), "Fiyat Değişim %": round(chg, 2)})
-            except Exception:
-                continue
-        anomalies.sort(key=lambda x: x["RVOL"], reverse=True)
-        return anomalies
-
-    if st.button(L(" Hacim Anomalisi Tara", " Scan Volume Anomaly"), key="vol_anomaly_btn"):
-        with st.spinner(L("Hacim taranıyor...", "Scanning volume...")):
-            vol_anom = _scan_volume_anomaly(tuple(MOMENTUM_UNIVERSE))
-        st.session_state["vol_anomaly_results"] = vol_anom
-
-    vol_results = st.session_state.get("vol_anomaly_results")
-    if vol_results is not None:
-        if not vol_results:
-            st.info(L("Bugün 3x+ hacim anomalisi bulunamadı.",
-                      "No 3x+ volume anomaly found today."))
-        else:
-            va_df = pd.DataFrame(vol_results).rename(columns={
-                "Hisse": L("Hisse", "Ticker"),
-                "Fiyat Değişim %": L("Fiyat Değişim %", "Price Change %"),
-            })
-            st.dataframe(va_df, use_container_width=True, hide_index=True,
-                         column_config={
-                             "RVOL": st.column_config.NumberColumn(format="%.2fx"),
-                             L("Fiyat Değişim %", "Price Change %"):
-                                 st.column_config.NumberColumn(format="%.2f%%"),
-                         })
-
-    st.divider()
-
-    # ---------- 7b) DARK POOL / OFF-EXCHANGE (FINRA) ----------
-    st.markdown("###  " + L("Dark Pool & Off-Exchange Aktivitesi",
-                            "Dark Pool & Off-Exchange Activity"))
-    st.caption(L(
-        "FINRA günlük konsolide short-hacim verisi (resmi, ücretsiz, ~1 gün gecikmeli). "
-        "Short hacmin toplam hacme yüksek oranı = yoğun borsa-dışı/kurumsal aktivite vekili. "
-        "Gerçek zamanlı dark pool print'i değildir.",
-        "FINRA daily consolidated short-volume data (official, free, ~1 day delayed). "
-        "A high short-to-total ratio proxies heavy off-exchange/institutional activity. "
-        "It is not a real-time dark pool print."))
-    if st.button(L(" Dark Pool Tara (FINRA)", " Scan Dark Pool (FINRA)"), key="darkpool_btn"):
-        with st.spinner(L("FINRA verisi çekiliyor...", "Fetching FINRA data...")):
-            st.session_state["darkpool_res"] = finra_short_volume(tuple(tickers))
-
-    dp = st.session_state.get("darkpool_res")
-    if dp is not None:
-        if not dp.get("ok"):
-            st.info(L(
-                f"Veri alınamadı ({dp.get('reason', 'bilinmiyor')}). "
-                "Hafta sonu/tatilde FINRA dosyası yayınlanmaz.",
-                f"Data unavailable ({dp.get('reason', 'unknown')}). "
-                "FINRA files are not published on weekends/holidays."))
-        else:
-            st.caption(L("Veri tarihi: ", "Data date: ") + str(dp['date']))
-            _hisse = L("Hisse", "Ticker")
-            _sh = L("Short Hacim", "Short Volume")
-            _th = L("Toplam Hacim", "Total Volume")
-            dpv = dp["df"][["Symbol", "Short %", "ShortVolume", "TotalVolume"]].rename(
-                columns={"Symbol": _hisse, "ShortVolume": _sh, "TotalVolume": _th})
-            st.dataframe(dpv, use_container_width=True, hide_index=True,
-                         column_config={
-                             "Short %": st.column_config.ProgressColumn(
-                                 "Short %", format="%.1f%%", min_value=0, max_value=100),
-                             _sh: st.column_config.NumberColumn(format="%d"),
-                             _th: st.column_config.NumberColumn(format="%d"),
-                         })
-            hot = dpv.iloc[0]
-            st.markdown(
-                L(" En yüksek off-exchange baskısı: **{s}** (short oranı {r}%)",
-                  " Highest off-exchange pressure: **{s}** (short ratio {r}%)").format(
-                    s=hot[_hisse], r=hot['Short %']))
-
-    st.divider()
-
-    # ---------- 7c) OPSİYON AKIŞI (yfinance) ----------
-    st.markdown("###  " + L("Opsiyon Akışı", "Options Flow"))
-    st.caption(L(
-        "yfinance opsiyon zincirinden ücretsiz vekil: Put/Call dengesi ve olağandışı "
-        "kontratlar (günlük hacim > açık pozisyon = yeni pozisyon akını). "
-        "Gerçek zamanlı paralı 'flow' değildir.",
-        "Free proxy from the yfinance option chain: Put/Call balance and unusual "
-        "contracts (daily volume > open interest = new positioning). "
-        "It is not a real-time paid 'flow'."))
-    of_col = st.columns([2, 1])
-    of_ticker = of_col[0].selectbox(L("Hisse seç", "Select ticker"), tickers, key="of_ticker")
-    if of_col[1].button(L(" Opsiyon Akışını Getir", " Get Options Flow"), key="opt_flow_btn"):
-        with st.spinner(L(f"{of_ticker} opsiyon zinciri okunuyor...",
-                          f"Reading {of_ticker} option chain...")):
-            st.session_state["opt_flow_res"] = (of_ticker, options_flow(of_ticker))
-
-    ofr = st.session_state.get("opt_flow_res")
-    if ofr is not None:
-        of_sym, of = ofr
-        if not of.get("ok"):
-            st.info(L(
-                f"{of_sym} için opsiyon verisi bulunamadı (opsiyonu olmayan/likit olmayan hisse olabilir).",
-                f"No options data for {of_sym} (may be an illiquid or non-optionable stock)."))
-        else:
-            pc = of["pc_ratio"]
-            m = st.columns(4)
-            m[0].metric(L("Call Hacmi", "Call Volume"), f"{of['call_vol']:,.0f}")
-            m[1].metric(L("Put Hacmi", "Put Volume"), f"{of['put_vol']:,.0f}")
-            m[2].metric(L("Put/Call Oranı", "Put/Call Ratio"), f"{pc:.2f}" if pc else "—")
-            m[3].metric(L("Toplam OI", "Total OI"), f"{(of['call_oi'] + of['put_oi']):,.0f}")
-            if pc is not None:
-                if pc < 0.7:
-                    st.success(L(f" Call ağırlıklı (P/C {pc:.2f}) — boğa opsiyon iştahı.",
-                                 f" Call-heavy (P/C {pc:.2f}) — bullish options appetite."))
-                elif pc > 1.0:
-                    st.error(L(f" Put ağırlıklı (P/C {pc:.2f}) — korunma/ayı opsiyon iştahı.",
-                               f" Put-heavy (P/C {pc:.2f}) — hedging/bearish options appetite."))
-                else:
-                    st.info(L(f" Dengeli opsiyon akışı (P/C {pc:.2f}).",
-                              f" Balanced options flow (P/C {pc:.2f})."))
-            if of["unusual"]:
-                st.markdown(L("**Olağandışı Kontratlar** (hacim > açık pozisyon)",
-                              "**Unusual Contracts** (volume > open interest)"))
-                _u = pd.DataFrame(of["unusual"]).rename(columns={
-                    "Yön": L("Yön", "Side"), "Vade": L("Vade", "Expiry"),
-                    "Hacim": L("Hacim", "Volume")})
-                st.dataframe(_u, use_container_width=True, hide_index=True,
-                             column_config={
-                                 "Strike": st.column_config.NumberColumn(format="%.1f"),
-                                 L("Hacim", "Volume"): st.column_config.NumberColumn(format="%d"),
-                                 "OI": st.column_config.NumberColumn(format="%d"),
-                                 "Son $": st.column_config.NumberColumn(format="$%.2f"),
-                             })
-            else:
-                st.caption(L("Bu vadelerde olağandışı kontrat yok.",
-                             "No unusual contracts in these expiries."))
 
     st.divider()
 

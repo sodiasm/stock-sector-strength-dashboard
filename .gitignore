@@ -5,6 +5,10 @@ __pycache__/
 .venv/
 venv/
 env/
+data/daily/
+.pytest_cache/
+.pytest-tmp/
+*.log
 
 # Streamlit
 .streamlit/secrets.toml
