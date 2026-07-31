@@ -1,6 +1,6 @@
 """Streamlit page and section rendering functions."""
 
-from datetime import datetime
+from datetime import date, datetime
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -352,9 +352,20 @@ def _render_rrg():
         "Each sector ETF vs SPY: strength (RS-Ratio, x) and momentum (RS-Momentum, y). "
         "Rotates clockwise. Center at (100,100). The tail is the last ~8 days' path.")
 
+    selected_date = st.date_input(
+        "RRG date",
+        value=date.today(),
+        min_value=date(2026, 1, 1),
+        max_value=date.today(),
+        key="rrg_as_of_date",
+    )
+    if st.session_state.get("rrg_loaded_date") != selected_date:
+        st.session_state.pop("rrg_res", None)
+
     if st.button( " Analyze Rotation (RRG)", key="rrg_btn"):
         with st.spinner( "Computing RRG…"):
-            st.session_state["rrg_res"] = sector_rrg()
+            st.session_state["rrg_res"] = sector_rrg(as_of=selected_date)
+            st.session_state["rrg_loaded_date"] = selected_date
 
     rrg = st.session_state.get("rrg_res")
     if rrg is None:
@@ -363,6 +374,13 @@ def _render_rrg():
         else:
             st.info( " Press 'Analyze Rotation (RRG)'.")
         return
+
+    actual_dates = sorted({d["as_of"] for d in rrg.values()})
+    if actual_dates:
+        if len(actual_dates) == 1 and actual_dates[0] != selected_date.isoformat():
+            st.info(f"Selected date: {selected_date.isoformat()}; using latest available trading date: {actual_dates[0]}")
+        else:
+            st.caption(f"RRG as of {actual_dates[-1]}")
 
     quad_color = {"Leading": C_UP, "Weakening": C_GOLD, "Lagging": C_DOWN, "Improving": C_ACCENT}
     quad_tr = {"Leading": "Leading", "Weakening": "Weakening", "Lagging": "Lagging", "Improving": "Improving"}

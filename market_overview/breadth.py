@@ -102,6 +102,37 @@ def _batch_close(symbols_tuple: tuple, period: str = "1y") -> pd.DataFrame:
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
+def _batch_close_range(symbols_tuple: tuple, start: str, end: str) -> pd.DataFrame:
+    """Download aligned adjusted closes for an explicit historical date range."""
+    symbols = list(symbols_tuple)
+    raw = yf.download(symbols, start=start, end=end, interval="1d",
+                      group_by="ticker", auto_adjust=True, progress=False,
+                      threads=True)
+    if raw is None or raw.empty:
+        return pd.DataFrame()
+
+    multi = isinstance(raw.columns, pd.MultiIndex)
+    closes = {}
+    for t in symbols:
+        try:
+            if multi:
+                if t not in raw.columns.get_level_values(0):
+                    continue
+                s = raw[t]["Close"].dropna()
+            else:
+                s = raw["Close"].dropna()
+            if len(s) > 0:
+                closes[t] = s
+        except Exception as e:
+            logger.warning("breadth/range %s skipped: %s", t, e)
+    if not closes:
+        return pd.DataFrame()
+    result = pd.DataFrame(closes)
+    result.index = pd.DatetimeIndex(result.index).tz_localize(None).normalize()
+    return result
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
 def market_breadth(universe_tuple: tuple = tuple(SP500_UNIVERSE)) -> dict | None:
     """Percentage of the universe above the 50-day and 200-day MAs plus SPX divergence."""
     df = _batch_close(universe_tuple, "1y")
@@ -169,12 +200,22 @@ def defensive_cyclical() -> dict | None:
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
-def sector_rrg(benchmark: str = "SPY") -> dict | None:
+def sector_rrg(as_of=None, benchmark: str = "SPY") -> dict | None:
     """RS-Ratio/RS-Momentum tail and current quadrant for each sector ETF."""
+    today = pd.Timestamp.today().normalize()
+    as_of_ts = today if as_of is None else pd.Timestamp(as_of).normalize()
+    min_date = pd.Timestamp("2026-01-01")
+    if as_of_ts < min_date or as_of_ts > today:
+        raise ValueError(f"as_of must be between {min_date.date()} and {today.date()}")
+
     etfs = list(SECTOR_ETFS.keys())
-    df = _batch_close(tuple([benchmark] + etfs), "1y")
+    start = (as_of_ts - pd.DateOffset(years=1)).strftime("%Y-%m-%d")
+    end = (as_of_ts + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    df = _batch_close_range(tuple([benchmark] + etfs), start, end)
     if df.empty or benchmark not in df:
         return None
+
+    df = df.loc[df.index <= as_of_ts]
 
     bench = df[benchmark]
     out = {}
@@ -190,6 +231,7 @@ def sector_rrg(benchmark: str = "SPY") -> dict | None:
         out[etf] = {
             "name": SECTOR_ETFS[etf],
             "x": x, "y": y,
+            "as_of": tail.index[-1].date().isoformat(),
             "quadrant": classify_quadrant(x, y),
             "tail_x": tail["rs_ratio"].tolist(),
             "tail_y": tail["rs_mom"].tolist(),

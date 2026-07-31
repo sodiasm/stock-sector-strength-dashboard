@@ -7,7 +7,9 @@ from market_overview.breadth import (
     count_distribution_days,
     pct_series_above_ma,
     rrg_components,
+    sector_rrg,
 )
+from market_overview.config import SECTOR_ETFS
 
 
 def _series(values, start="2024-01-01"):
@@ -69,3 +71,29 @@ def test_rrg_components_returns_aligned_frame():
     assert list(comp.columns) == ["rs_ratio", "rs_mom"]
     assert not comp.isna().any().any()
     assert len(comp) > 100
+
+
+def test_sector_rrg_does_not_use_data_after_as_of(monkeypatch):
+    import market_overview.breadth as breadth
+
+    idx = pd.date_range("2025-01-01", "2026-02-10", freq="D")
+    data = {"SPY": pd.Series(np.linspace(100, 140, len(idx)), index=idx)}
+    for offset, etf in enumerate(SECTOR_ETFS):
+        data[etf] = pd.Series(
+            np.linspace(100 + offset, 145 + offset, len(idx))
+            + np.sin(np.arange(len(idx)) / 5 + offset),
+            index=idx,
+        )
+    captured = {}
+
+    def fake_batch(symbols, start, end):
+        captured["start"] = start
+        captured["end"] = end
+        return pd.DataFrame(data)
+
+    monkeypatch.setattr(breadth, "_batch_close_range", fake_batch)
+    result = sector_rrg(as_of="2026-02-03")
+
+    assert result
+    assert captured["end"] == "2026-02-04"
+    assert all(item["as_of"] <= "2026-02-03" for item in result.values())
