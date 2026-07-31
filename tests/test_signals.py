@@ -1,4 +1,4 @@
-"""signals.py skorlama/karar testleri (ağsız)."""
+"""signals.py scoring/decision tests (network-free)."""
 import pytest
 
 from market_overview.signals import compute_score, system_decision
@@ -23,12 +23,12 @@ def test_compute_score_total_is_component_sum(ohlcv):
 @pytest.mark.parametrize(
     "score,expected",
     [
-        (100, "AL için uygun"),
-        (70, "AL için uygun"),
-        (69, "Bekle / izlemeye değer"),
-        (40, "Bekle / izlemeye değer"),
-        (39, "İşleme girmek riskli"),
-        (0, "İşleme girmek riskli"),
+        (100, "Suitable for BUY"),
+        (70, "Suitable for BUY"),
+        (69, "Wait / worth watching"),
+        (40, "Wait / worth watching"),
+        (39, "Entering a trade is risky"),
+        (0, "Entering a trade is risky"),
     ],
 )
 def test_system_decision_thresholds(score, expected):

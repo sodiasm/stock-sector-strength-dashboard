@@ -1,11 +1,11 @@
-"""Statik yapılandırma: sembol evrenleri, makro varlıklar, renkler, sabitler."""
+"""Static configuration: ticker universes, macro assets, colors, and constants."""
 
 import re
 
 TICKER_RE = re.compile(r"^[A-Z0-9.\-^]{1,10}$")
 
 
-MAX_TICKERS = 50  # aşırı sorgu/DoS'a karşı üst sınır
+MAX_TICKERS = 50  # Upper bound for excessive queries and DoS protection.
 
 
 DEFAULT_TICKERS = [
@@ -16,11 +16,11 @@ DEFAULT_TICKERS = [
 
 
 PERIOD_INTERVAL_MAP = {
-    "5 Gün / 15dk": ("5d", "15m"),
-    "1 Ay / 1saat": ("1mo", "1h"),
-    "3 Ay / Günlük": ("3mo", "1d"),
-    "6 Ay / Günlük": ("6mo", "1d"),
-    "1 Yıl / Günlük": ("1y", "1d"),
+    "5 Days / 15m": ("5d", "15m"),
+    "1 Month / 1h": ("1mo", "1h"),
+    "3 Months / Daily": ("3mo", "1d"),
+    "6 Months / Daily": ("6mo", "1d"),
+    "1 Year / Daily": ("1y", "1d"),
 }
 
 
@@ -97,20 +97,6 @@ C_GOLD = "#b87932"
 
 
 MACRO_ASSETS = {
-    "^GSPC": "S&P 500",
-    "^IXIC": "Nasdaq",
-    "QQQ":   "QQQ (Nasdaq ETF)",
-    "^DJI":  "Dow Jones",
-    "^RUT":  "Russell 2000",
-    "^VIX":  "VIX (Korku)",
-    "^TNX":  "10Y Faiz",
-    "DX-Y.NYB": "Dolar (DXY)",
-    "GC=F":  "Altın",
-    "CL=F":  "Petrol",
-    "BTC-USD": "Bitcoin",
-}
-
-MACRO_ASSETS_EN = {
     "^GSPC": "S&P 500", "^IXIC": "Nasdaq", "QQQ": "QQQ (Nasdaq ETF)", "^DJI": "Dow Jones",
     "^RUT": "Russell 2000", "^VIX": "VIX (Fear)", "^TNX": "10Y Yield", "DX-Y.NYB": "Dollar (DXY)",
     "GC=F": "Gold", "CL=F": "Oil", "BTC-USD": "Bitcoin",
@@ -118,48 +104,34 @@ MACRO_ASSETS_EN = {
 
 
 GLOBAL_INDICES = {
-    "Amerika": {
-        "^GSPC": {"isim": "S&P 500", "ulke": ""},
-        "^IXIC": {"isim": "Nasdaq", "ulke": ""},
-        "QQQ": {"isim": "QQQ", "ulke": ""},
-        "^RUT": {"isim": "Russell 2000", "ulke": ""},
-        "^BVSP": {"isim": "Bovespa", "ulke": ""},
+    "Americas": {
+        "^GSPC": {"name": "S&P 500", "country": ""},
+        "^IXIC": {"name": "Nasdaq", "country": ""},
+        "QQQ": {"name": "QQQ", "country": ""},
+        "^RUT": {"name": "Russell 2000", "country": ""},
+        "^BVSP": {"name": "Bovespa", "country": ""},
     },
-    "Avrupa": {
-        "^FTSE": {"isim": "FTSE 100", "ulke": ""},
-        "^GDAXI": {"isim": "DAX", "ulke": ""},
-        "^FCHI": {"isim": "CAC 40", "ulke": ""},
-        "^STOXX50E":{"isim": "Euro Stoxx", "ulke": ""},
-        "XU100.IS": {"isim": "BIST 100", "ulke": ""},
+    "Europe": {
+        "^FTSE": {"name": "FTSE 100", "country": ""},
+        "^GDAXI": {"name": "DAX", "country": ""},
+        "^FCHI": {"name": "CAC 40", "country": ""},
+        "^STOXX50E":{"name": "Euro Stoxx", "country": ""},
+        "XU100.IS": {"name": "BIST 100", "country": ""},
     },
-    "Asya-Pasifik": {
-        "^N225": {"isim": "Nikkei 225", "ulke": ""},
-        "^KS11": {"isim": "KOSPI", "ulke": ""},
-        "^HSI": {"isim": "Hang Seng", "ulke": ""},
-        "000001.SS":{"isim": "Shanghai", "ulke": ""},
-        "^NSEI": {"isim": "NIFTY 50", "ulke": ""},
-        "^AXJO": {"isim": "ASX 200", "ulke": ""},
+    "Asia-Pacific": {
+        "^N225": {"name": "Nikkei 225", "country": ""},
+        "^KS11": {"name": "KOSPI", "country": ""},
+        "^HSI": {"name": "Hang Seng", "country": ""},
+        "000001.SS":{"name": "Shanghai", "country": ""},
+        "^NSEI": {"name": "NIFTY 50", "country": ""},
+        "^AXJO": {"name": "ASX 200", "country": ""},
     },
 }
 
-GLOBAL_REGIONS_EN = {"Amerika": "Americas", "Avrupa": "Europe", "Asya-Pasifik": "Asia-Pacific"}
+GLOBAL_REGIONS = {"Americas": "Americas", "Europe": "Europe", "Asia-Pacific": "Asia-Pacific"}
 
 
 SECTOR_ETFS = {
-    "XLK": "Teknoloji",
-    "XLF": "Finans",
-    "XLE": "Enerji",
-    "XLV": "Sağlık",
-    "XLY": "Tüketici (İsteğe Bağlı)",
-    "XLP": "Tüketici (Temel)",
-    "XLI": "Sanayi",
-    "XLB": "Hammadde",
-    "XLU": "Kamu Hizmetleri",
-    "XLRE": "Gayrimenkul",
-    "XLC": "İletişim",
-}
-
-SECTOR_ETFS_EN = {
     "XLK": "Technology", "XLF": "Financials", "XLE": "Energy", "XLV": "Health Care",
     "XLY": "Consumer Discretionary", "XLP": "Consumer Staples", "XLI": "Industrials",
     "XLB": "Materials", "XLU": "Utilities", "XLRE": "Real Estate", "XLC": "Communication Services",

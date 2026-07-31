@@ -8,7 +8,7 @@ from market_overview.persistence import save_daily_sector_snapshot
 
 def test_daily_sector_snapshot_writes_json_and_csv(tmp_path):
     frame = pd.DataFrame([
-        {"Sektör": "科技", "Sembol": "XLK", "Günlük %": 1.2, "Haftalık %": 3.4},
+        {"Sector": "Technology", "Symbol": "XLK", "Daily %": 1.2, "Weekly %": 3.4},
     ])
 
     json_path, csv_path = save_daily_sector_snapshot(

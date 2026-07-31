@@ -1,4 +1,4 @@
-"""Basit backtest ve trade planı üretimi/gösterimi."""
+"""Simple backtest and trade-plan generation/rendering."""
 
 import numpy as np
 import pandas as pd
@@ -20,19 +20,19 @@ def backtest(df: pd.DataFrame, initial_cash: float = 10000.0, fee_pct: float = 0
         if buys[i] and position == 0:
             qty = (cash * (1 - fee)) / price
             position, entry_price, cash = qty, price, 0.0
-            trades.append({"Tarih": idx[i], "Tip": "AL", "Fiyat": round(price, 2),
-                           "Adet": round(qty, 4), "P&L %": None})
+            trades.append({"Date": idx[i], "Type": "BUY", "Price": round(price, 2),
+                           "Shares": round(qty, 4), "P&L %": None})
         elif sells[i] and position > 0:
             cash = position * price * (1 - fee)
             pnl = (price - entry_price) / entry_price * 100
-            trades.append({"Tarih": idx[i], "Tip": "SAT", "Fiyat": round(price, 2),
-                           "Adet": round(position, 4), "P&L %": round(pnl, 2)})
+            trades.append({"Date": idx[i], "Type": "SELL", "Price": round(price, 2),
+                           "Shares": round(position, 4), "P&L %": round(pnl, 2)})
             position = 0.0
         equity_curve.append(cash + position * price)
 
     final = cash + position * closes[-1]
     total_ret = (final - initial_cash) / initial_cash * 100
-    closed = [t for t in trades if t["Tip"] == "SAT"]
+    closed = [t for t in trades if t["Type"] == "SELL"]
     wins = [t for t in closed if t["P&L %"] and t["P&L %"] > 0]
     win_rate = len(wins) / len(closed) * 100 if closed else 0
     bh_ret = (closes[-1] - closes[0]) / closes[0] * 100
@@ -47,18 +47,18 @@ def backtest(df: pd.DataFrame, initial_cash: float = 10000.0, fee_pct: float = 0
 def build_trade_plan(df: pd.DataFrame, side: str,
                      account_size: float = 10000.0, risk_pct: float = 1.0) -> dict:
     """
-    df: ut_bot_signals çıktısı ('stop' ve 'atr' kolonları olmalı).
-    side: 'AL' (long) veya 'SAT' (short).
-    Gerçek bir işlemde girilecek tüm parametreleri döner.
+    df: ut_bot_signals output ('stop' ve 'atr' kolonlari must be).
+    side: 'BUY' (long) or 'SELL' (short).
+    Returns all parameters for a real trade plan.
     """
     last = df.iloc[-1]
     entry = float(last["Close"])
     atr = float(last["atr"]) if not pd.isna(last["atr"]) else entry * 0.02
     ut_stop = float(last["stop"])
 
-    if side == "AL":   # LONG
-        # Stop: UT stop ile ATR bazlı stop'tan hangisi daha koruyucuysa (daha yakın olan değil,
-        # mantıklı olan) — burada ikisinin daha düşüğünü alıp makul bir tampon bırakıyoruz.
+    if side == "BUY":   # LONG
+        # Stop: UT stop ile ATR bazli stop'tan hangisi daha koruyucuysa (daha yakin olan degil,
+        # Choose the more conservative stop and leave a reasonable buffer.
         atr_stop = entry - 1.5 * atr
         stop = min(ut_stop, atr_stop) if ut_stop < entry else atr_stop
         risk_per_share = max(entry - stop, entry * 0.001)
@@ -75,19 +75,19 @@ def build_trade_plan(df: pd.DataFrame, side: str,
     shares = risk_amount / risk_per_share if risk_per_share > 0 else 0
     position_value = shares * entry
 
-    # Trend filtresi (yeterli veri varsa EMA50)
+    # Trend filter when enough data is available for EMA50
     ema50 = compute_ema(df["Close"], 50)
     trend = "—"
     if len(df) >= 50:
         if entry > ema50.iloc[-1] and ema50.iloc[-1] > ema50.iloc[-5]:
-            trend = "Yukarı (EMA50 üstünde ve yükseliyor)"
+            trend = "Up (EMA50 ustunde ve yukseliyor)"
         elif entry < ema50.iloc[-1] and ema50.iloc[-1] < ema50.iloc[-5]:
-            trend = "Aşağı (EMA50 altında ve düşüyor)"
+            trend = "Down (EMA50 altinda ve falling)"
         else:
-            trend = "Yatay / kararsız"
+            trend = "Sideways / uncertain"
 
-    # Trend uyumu uyarısı
-    aligned = (side == "AL" and "Yukarı" in trend) or (side == "SAT" and "Aşağı" in trend)
+    # Trend alignment warning
+    aligned = (side == "BUY" and "Up" in trend) or (side == "SELL" and "Down" in trend)
 
     return {
         "side": side,
@@ -110,25 +110,25 @@ def build_trade_plan(df: pd.DataFrame, side: str,
 
 
 def render_trade_plan(plan: dict):
-    """Trade planını Streamlit kartı olarak çizer."""
-    side_txt = " LONG (AL)" if plan["side"] == "AL" else " SHORT (SAT)"
-    st.markdown(f"##### Trade Planı — {side_txt}")
+    """Render the trade plan as a Streamlit card."""
+    side_txt = " LONG (BUY)" if plan["side"] == "BUY" else " SHORT (SELL)"
+    st.markdown(f"##### Trade Plan — {side_txt}")
     c = st.columns(4)
-    c[0].metric("Giriş", f"${plan['entry']}")
+    c[0].metric("Entry", f"${plan['entry']}")
     c[1].metric(" Stop-Loss", f"${plan['stop']}", delta=f"{plan['stop_pct']}%")
-    c[2].metric(" Hedef 1 (1.5R)", f"${plan['tp1']}", delta=f"{plan['tp1_pct']}%")
-    c[3].metric(" Hedef 2 (3R)", f"${plan['tp2']}", delta=f"{plan['tp2_pct']}%")
+    c[2].metric(" Target 1 (1.5R)", f"${plan['tp1']}", delta=f"{plan['tp1_pct']}%")
+    c[3].metric(" Target 2 (3R)", f"${plan['tp2']}", delta=f"{plan['tp2_pct']}%")
 
     c2 = st.columns(4)
-    c2[0].metric("Pozisyon (lot)", f"{plan['shares']} adet")
-    c2[1].metric("Pozisyon Değeri", f"${plan['position_value']:,.0f}")
-    c2[2].metric("Riske Atılan", f"${plan['risk_amount']:,.0f}")
-    c2[3].metric("Risk/Ödül", plan["rr"])
+    c2[0].metric("Position (shares)", f"{plan['shares']} shares")
+    c2[1].metric("Position Value", f"${plan['position_value']:,.0f}")
+    c2[2].metric("Risk Amount", f"${plan['risk_amount']:,.0f}")
+    c2[3].metric("Risk/Reward", plan["rr"])
 
     if plan["trend"] != "—":
         if plan["aligned"]:
-            st.success(f" Trend uyumlu: {plan['trend']} — işlem trend yönünde.")
+            st.success(f" Trend-aligned: {plan['trend']} — trade with the trend.")
         else:
-            st.warning(f" Trende dikkat: {plan['trend']} — işlemin trende karşı olabilir, risk yüksek.")
-    st.caption(f"Hesaplama: ATR ${plan['atr']} • Hisse başı risk ${plan['risk_per_share']} • "
-               "Stop'a değerse kaybın 'Riske Atılan' tutarıdır. Bu bir emir değildir, plan şablonudur.")
+            st.warning(f" Trend caution: {plan['trend']} — the trade may go against the trend and risk is high.")
+    st.caption(f"Calculation: ATR ${plan['atr']} • Stock per-share risk ${plan['risk_per_share']} • "
+               "Stop'a degerse kaybin 'Risk Amount' tutaridir. Bu bir emir degildir, plan sablonudur.")

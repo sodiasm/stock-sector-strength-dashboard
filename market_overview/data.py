@@ -11,10 +11,10 @@ from market_overview.logging_conf import logger
 
 
 def retry(attempts: int = 3, base_delay: float = 0.5):
-    """Ağ çağrılarını exponential backoff ile yeniden dener (0.5s, 1s, 2s).
+    """Retry network calls with exponential backoff (0.5s, 1s, 2s).
 
-    Yalnızca exception'da tekrar dener. Tüm denemeler tükenirse hatayı loglar
-    ve ``None`` döner — böylece çağıran taraf mevcut davranışı (None) korur.
+    Retry only on exceptions. If all attempts fail, log the error and return
+    ``None`` so callers retain the existing behavior.
     """
     def decorator(fn):
         @functools.wraps(fn)
@@ -23,9 +23,9 @@ def retry(attempts: int = 3, base_delay: float = 0.5):
             for attempt in range(attempts):
                 try:
                     return fn(*args, **kwargs)
-                except Exception as e:  # noqa: BLE001 — bilinçli geniş yakalama
+                except Exception as e:  # noqa: BLE001 — intentionally broad catch
                     if attempt == attempts - 1:
-                        logger.warning("%s %d denemede başarısız: %s", fn.__name__, attempts, e)
+                        logger.warning("%s failed after %d attempts: %s", fn.__name__, attempts, e)
                         return None
                     time.sleep(delay)
                     delay *= 2
@@ -36,22 +36,22 @@ def retry(attempts: int = 3, base_delay: float = 0.5):
 
 @st.cache_data(ttl=3600)
 def get_float_shares(ticker: str) -> float | None:
-    """Hissenin dolaşımdaki float hissesi sayısını çeker (milyon cinsinden)."""
+    """Fetch the stock's circulating float share count in millions."""
     try:
         info = yf.Ticker(ticker).info
         fs = info.get("floatShares") or info.get("sharesOutstanding")
         return round(fs / 1e6, 1) if fs else None
     except Exception as e:
-        logger.warning("%s float verisi çekilemedi: %s", ticker, e)
+        logger.warning("%s float data could not be fetched: %s", ticker, e)
         return None
 
 
 def sector_rs(ticker: str, df: pd.DataFrame) -> dict:
     """
-    Hissenin kendi sektör ETF'ine karşı göreli gücünü hesaplar.
-    Sektör ETF'inden güçlüyse = sektör lideri.
+    Calculate the stock's relative strength against its sector ETF.
+    A positive result means the stock is stronger than its sector ETF.
     """
-    # Hangi sektörde?
+    # Which sector?
     sector_etf = None
     for etf, stocks in STOCK_SECTOR_MAP.items():
         if ticker in stocks:
@@ -64,7 +64,7 @@ def sector_rs(ticker: str, df: pd.DataFrame) -> dict:
     if etf_df is None or len(etf_df) < 20:
         return {"vs_sector": None, "sector_etf": sector_etf}
 
-    # Son 3 ay getirisi: hisse vs ETF
+    # Trailing 3-month return: stock vs ETF
     stock_ret = (float(df["Close"].iloc[-1]) / float(df["Close"].iloc[-63]) - 1) * 100 if len(df) >= 63 else 0
     etf_ret   = (float(etf_df["Close"].iloc[-1]) / float(etf_df["Close"].iloc[-63]) - 1) * 100 if len(etf_df) >= 63 else 0
     vs_sector = round(stock_ret - etf_ret, 1)
@@ -76,9 +76,10 @@ def sector_rs(ticker: str, df: pd.DataFrame) -> dict:
 @st.cache_data(ttl=180, show_spinner=False)
 @retry()
 def fetch_daily(ticker: str, period: str = "3mo") -> pd.DataFrame | None:
-    """Günlük veri (Piyasa Nabzı için, kısa cache = canlıya yakın).
+    """Daily data for Market Pulse with a short cache for near-live data.
 
-    Ağ hatalarında :func:`retry` ile 3 kez denenir; kalıcı hatada ``None`` döner.
+    Network errors are retried three times with :func:`retry`; permanent errors
+    return ``None``.
     """
     df = yf.download(ticker, period=period, interval="1d",
                      progress=False, auto_adjust=True)
@@ -92,7 +93,7 @@ def fetch_daily(ticker: str, period: str = "3mo") -> pd.DataFrame | None:
 @st.cache_data(ttl=300, show_spinner=False)
 @retry()
 def fetch_data(ticker: str, period: str, interval: str) -> pd.DataFrame | None:
-    """Belirtilen periyot/aralıkta veri çeker; ağ hatalarında yeniden dener."""
+    """Fetch data for the requested period and interval; retry on network errors."""
     df = yf.download(ticker, period=period, interval=interval,
                      progress=False, auto_adjust=True)
     if df is None or len(df) < 30:

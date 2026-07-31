@@ -1,10 +1,10 @@
-"""Kullanıcı girdisi doğrulama (sınırda temizleme)."""
+"""User-input validation and boundary sanitization."""
 
 from market_overview.config import MAX_TICKERS, TICKER_RE
 
 
 def sanitize_tickers(raw: str) -> list:
-    """Ham kullanıcı girdisini güvenli, tekrarsız sembol listesine indirger."""
+    """Normalize raw user input into a safe, unique ticker list."""
     seen, out = set(), []
     for part in raw.split(","):
         sym = part.strip().upper()

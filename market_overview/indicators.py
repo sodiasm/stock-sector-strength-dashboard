@@ -1,4 +1,4 @@
-"""Saf teknik gösterge hesaplamaları (pandas/numpy)."""
+"""Saf teknik gosterge hesaplamalari (pandas/numpy)."""
 
 import numpy as np
 import pandas as pd
@@ -19,7 +19,7 @@ def compute_rsi(series: pd.Series, period: int = 14) -> pd.Series:
 
 
 def compute_mfi(df: pd.DataFrame, period: int = 14) -> pd.Series:
-    """Money Flow Index — hacim ağırlıklı RSI; para girişi/çıkışını ölçer."""
+    """Money Flow Index — volume-weighted RSI; measures money inflow/outflow."""
     tp = (df["High"] + df["Low"] + df["Close"]) / 3
     mf = tp * df["Volume"]
     pos = mf.where(tp > tp.shift(), 0.0)
@@ -31,13 +31,13 @@ def compute_mfi(df: pd.DataFrame, period: int = 14) -> pd.Series:
 
 
 def compute_obv(df: pd.DataFrame) -> pd.Series:
-    """On-Balance Volume — hacmi fiyat yönüne göre toplar; birikim/dağıtım izi."""
+    """On-Balance Volume — accumulates volume by price direction."""
     direction = np.sign(df["Close"].diff()).fillna(0)
     return (direction * df["Volume"]).cumsum()
 
 
 def relative_volume(df: pd.DataFrame, window: int = 20) -> float:
-    """Bugünkü hacim / son `window` günün ortalaması. >1.5 = olağandışı ilgi."""
+    """Today's volume / the last `window` today's averages. >1.5 = unusual ilgi."""
     if len(df) < window + 1:
         return 1.0
     avg = df["Volume"].iloc[-window - 1:-1].mean()
@@ -45,7 +45,7 @@ def relative_volume(df: pd.DataFrame, window: int = 20) -> float:
 
 
 def compute_adr_pct(df: pd.DataFrame, period: int = 20) -> float:
-    """Average Daily Range % — günlük volatilite (Qullamaggie/Minervini metriği)."""
+    """Average Daily Range % — daily volatilite (Qullamaggie/Minervini metrigi)."""
     if len(df) < period + 1:
         period = max(2, len(df) - 1)
     dr = df["High"] / df["Low"]
@@ -53,7 +53,7 @@ def compute_adr_pct(df: pd.DataFrame, period: int = 20) -> float:
 
 
 def momentum_score(df: pd.DataFrame) -> float:
-    """IBD tarzı ağırlıklı getiri (göreli güç ham puanı)."""
+    """IBD-style weighted return used as the raw relative-strength score."""
     c = df["Close"]
     def ret(n):
         return c.iloc[-1] / c.iloc[-n] - 1 if len(c) > n else c.iloc[-1] / c.iloc[0] - 1
@@ -61,7 +61,7 @@ def momentum_score(df: pd.DataFrame) -> float:
 
 
 def trend_template(df: pd.DataFrame) -> dict:
-    """Minervini Trend Template kontrolleri + Qullamaggie EMA bulutu durumu."""
+    """Minervini Trend Template checks plus Qullamaggie EMA cloud status."""
     c = df["Close"]
     price = float(c.iloc[-1])
     ema10 = compute_ema(c, 10).iloc[-1]
@@ -74,13 +74,13 @@ def trend_template(df: pd.DataFrame) -> dict:
     low52 = float(c.iloc[-252:].min()) if len(c) >= 60 else float(c.min())
 
     checks = {
-        "Fiyat > 50MA": price > sma50,
+        "Price > 50MA": price > sma50,
         "50MA > 150MA": sma50 > sma150,
         "150MA > 200MA": sma150 > sma200,
-        "200MA yükseliyor": sma200 > sma200_prev,
-        "52H zirvenin %25'i içinde": price >= high52 * 0.75,
-        "52H dipten %30+ yukarı": price >= low52 * 1.30,
-        "Bulut üstünde (EMA10>EMA20)": price > ema10 and ema10 > ema20,
+        "200MA yukseliyor": sma200 > sma200_prev,
+        "52H zirvenin %25'i icinde": price >= high52 * 0.75,
+        "Within 30% of the 52-week low": price >= low52 * 1.30,
+        "Bulut ustunde (EMA10>EMA20)": price > ema10 and ema10 > ema20,
     }
     return {
         "passed": sum(checks.values()),

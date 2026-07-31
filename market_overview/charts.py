@@ -1,4 +1,4 @@
-"""Plotly grafik üreticileri."""
+"""Plotly grafik ureticileri."""
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -16,10 +16,10 @@ def make_ut_chart(df: pd.DataFrame, title: str) -> go.Figure:
 
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True,
                         row_heights=[0.6, 0.18, 0.22], vertical_spacing=0.03,
-                        subplot_titles=("Fiyat & UT Bot", "Hacim", "RSI"))
+                        subplot_titles=("Price & UT Bot", "Volume", "RSI"))
 
     fig.add_trace(go.Candlestick(x=df.index, open=df["Open"], high=df["High"],
-                  low=df["Low"], close=df["Close"], name="Fiyat",
+                  low=df["Low"], close=df["Close"], name="Price",
                   increasing_line_color=C_UP, decreasing_line_color=C_DOWN,
                   increasing_fillcolor=C_UP, decreasing_fillcolor=C_DOWN), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df["stop"], name="UT Stop",
@@ -31,14 +31,14 @@ def make_ut_chart(df: pd.DataFrame, title: str) -> go.Figure:
 
     buys, sells = df[df["buy"]], df[df["sell"]]
     fig.add_trace(go.Scatter(x=buys.index, y=buys["Low"] * 0.985, mode="markers",
-                  name="AL", marker=dict(symbol="triangle-up", size=14, color=C_UP,
+                  name="BUY", marker=dict(symbol="triangle-up", size=14, color=C_UP,
                   line=dict(color="white", width=1))), row=1, col=1)
     fig.add_trace(go.Scatter(x=sells.index, y=sells["High"] * 1.015, mode="markers",
-                  name="SAT", marker=dict(symbol="triangle-down", size=14, color=C_DOWN,
+                  name="SELL", marker=dict(symbol="triangle-down", size=14, color=C_DOWN,
                   line=dict(color="white", width=1))), row=1, col=1)
 
     colors = [C_UP if c >= o else C_DOWN for c, o in zip(df["Close"], df["Open"])]
-    fig.add_trace(go.Bar(x=df.index, y=df["Volume"], name="Hacim",
+    fig.add_trace(go.Bar(x=df.index, y=df["Volume"], name="Volume",
                   marker_color=colors, opacity=0.6), row=2, col=1)
 
     fig.add_trace(go.Scatter(x=df.index, y=rsi, name="RSI",
@@ -59,24 +59,24 @@ def make_ut_chart(df: pd.DataFrame, title: str) -> go.Figure:
 def make_equity_chart(equity_curve, index) -> go.Figure:
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=index, y=equity_curve, fill="tozeroy",
-                  line=dict(color=C_ACCENT, width=2), name="Portföy"))
-    fig.update_layout(title="Portföy Değeri (Equity Curve)", template="plotly_white",
+                  line=dict(color=C_ACCENT, width=2), name="Portfoy"))
+    fig.update_layout(title="Portfoy Degeri (Equity Curve)", template="plotly_white",
                       paper_bgcolor="#f6f1e8", plot_bgcolor="#fbf8f2",
                       height=260, margin=dict(l=10, r=10, t=40, b=10))
     return fig
 
 
 def make_cloud_chart(df: pd.DataFrame, title: str) -> go.Figure:
-    """Qullamaggie tarzı 10/20 EMA bulutu + 50/200 SMA + düşen trend çizgisi grafiği."""
+    """Qullamaggie 10/20 EMA cloud, 50/200 SMA, and falling trendline chart."""
     c = df["Close"]
     ema10, ema20 = compute_ema(c, 10), compute_ema(c, 20)
     sma50 = c.rolling(50).mean()
     sma200 = c.rolling(200).mean()
 
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.78, 0.22],
-                        vertical_spacing=0.04, subplot_titles=(title, "Hacim"))
+                        vertical_spacing=0.04, subplot_titles=(title, "Volume"))
 
-    # EMA bulutu (10-20 arası dolgu)
+    # EMA bulutu (10-20 arasi dolgu)
     fig.add_trace(go.Scatter(x=df.index, y=ema20, line=dict(width=0), showlegend=False,
                   hoverinfo="skip"), row=1, col=1)
     cloud_up = (ema10 >= ema20).iloc[-1]
@@ -86,7 +86,7 @@ def make_cloud_chart(df: pd.DataFrame, title: str) -> go.Figure:
                   row=1, col=1)
 
     fig.add_trace(go.Candlestick(x=df.index, open=df["Open"], high=df["High"], low=df["Low"],
-                  close=df["Close"], name="Fiyat", increasing_line_color=C_UP,
+                  close=df["Close"], name="Price", increasing_line_color=C_UP,
                   decreasing_line_color=C_DOWN, increasing_fillcolor=C_UP,
                   decreasing_fillcolor=C_DOWN), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=sma50, name="SMA 50",
@@ -94,17 +94,17 @@ def make_cloud_chart(df: pd.DataFrame, title: str) -> go.Figure:
     fig.add_trace(go.Scatter(x=df.index, y=sma200, name="SMA 200",
                   line=dict(color="#ef5350", width=1.2)), row=1, col=1)
 
-    # Düşen trend (direnç) çizgisi — TradingView'daki beyaz diyagonal
+    # Falling trend (resistance) line — the white diagonal used in TradingView
     dt = detect_downtrend_line(df)
     if dt:
         fig.add_trace(go.Scatter(x=[dt["x0"], dt["x1"]], y=[dt["y0"], dt["y1"]],
-                      mode="lines", name="Düşen Trend Çizgisi",
+                      mode="lines", name="Falling Trend Cizgisi",
                       line=dict(color="white", width=2, dash="solid")), row=1, col=1)
 
     colors = [C_UP if cl >= o else C_DOWN for cl, o in zip(df["Close"], df["Open"])]
-    fig.add_trace(go.Bar(x=df.index, y=df["Volume"], name="Hacim",
+    fig.add_trace(go.Bar(x=df.index, y=df["Volume"], name="Volume",
                   marker_color=colors, opacity=0.55), row=2, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df["Volume"].rolling(50).mean(), name="Hacim Ort.",
+    fig.add_trace(go.Scatter(x=df.index, y=df["Volume"].rolling(50).mean(), name="Volume Avg.",
                   line=dict(color=C_GOLD, width=1)), row=2, col=1)
 
     fig.update_layout(template="plotly_white", paper_bgcolor="#f6f1e8",

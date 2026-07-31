@@ -1,4 +1,4 @@
-"""security.py girdi doğrulama testleri (ağsız)."""
+"""security.py input validation tests (network-free)."""
 from market_overview.config import MAX_TICKERS
 from market_overview.security import sanitize_tickers
 

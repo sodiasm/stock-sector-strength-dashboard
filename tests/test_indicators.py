@@ -1,4 +1,4 @@
-"""indicators.py saf hesaplama testleri (ağsız)."""
+"""indicators.py pure calculation tests (network-free)."""
 import numpy as np
 
 from market_overview.indicators import (
@@ -16,7 +16,7 @@ def test_rsi_stays_within_bounds(ohlcv):
 
 def test_rsi_high_in_uptrend(ohlcv):
     rsi_last = float(compute_rsi(ohlcv["Close"]).iloc[-1])
-    assert rsi_last > 70  # güçlü yükselişte RSI yüksek olmalı
+    assert rsi_last > 70  # guclu yukseliste RSI yuksek must be
 
 
 def test_adr_pct_is_positive(ohlcv):

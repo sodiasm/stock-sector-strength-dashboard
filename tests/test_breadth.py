@@ -1,4 +1,4 @@
-"""breadth.py saf fonksiyon testleri (ağsız)."""
+"""breadth.py pure-function tests (network-free)."""
 import numpy as np
 import pandas as pd
 
@@ -23,7 +23,7 @@ def test_classify_quadrant_all_four():
 
 
 def test_classify_quadrant_boundary_is_leading():
-    # 100/100 sınırı Leading tarafına dahil (>=)
+    # 100/100 siniri Leading tarafina dahil (>=)
     assert classify_quadrant(100, 100) == "Leading"
 
 
@@ -47,7 +47,7 @@ def test_pct_above_ma_all_when_all_rising():
 
 
 def test_distribution_days_counts_down_on_higher_volume():
-    # her gün düşüş + artan hacim => her seans dağıtım günü
+    # daily decline plus rising volume makes every session a distribution day
     close = _series([100 - i for i in range(30)])
     volume = _series([1000 + i * 10 for i in range(30)])
     out = count_distribution_days(close, volume, lookback=10)
